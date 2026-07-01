@@ -1,0 +1,25 @@
+// This is the Prisma schema file for BusinessOS AI.
+// Learn more about Prisma: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────────
+// User Model
+// ──────────────────────────────────────────────────
+model User {
+  id        String   @id @default(cuid())   // Collision-resistant unique ID
+  name      String
+  email     String   @unique                // Email must be unique across all users
+  password  String                          // Hashed password (never plain text)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")                            // Maps to "users" table in PostgreSQL
+}
