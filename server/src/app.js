@@ -1,18 +1,3 @@
-/**
- * Express Application
- * ────────────────────────────────────────────────
- * Configures the Express app with:
- *   - Security middleware (helmet, cors)
- *   - Body parsers
- *   - Cookie parser
- *   - HTTP request logger (morgan)
- *   - API routes
- *   - 404 handler
- *   - Centralized error handler
- *
- * The server.js file is responsible for binding
- * this app to a port — keeping concerns separated.
- */
 
 require("dotenv").config();
 
@@ -24,56 +9,29 @@ const morgan = require("morgan");
 
 // ── Route Imports ─────────────────────────────────
 const authRoutes = require("./modules/auth/auth.routes");
+const workspaceRoutes = require("./modules/workspace/workspaceRoutes");
 
 const app = express();
 
-// ─────────────────────────────────────────────────
-// Security Middleware
-// ─────────────────────────────────────────────────
-
-/**
- * helmet: Sets security-related HTTP response headers
- * (e.g. X-Frame-Options, X-Content-Type-Options, etc.)
- */
 app.use(helmet());
 
-/**
- * cors: Allows the frontend (Next.js) to communicate
- * with this API. Only the configured CLIENT_URL is
- * whitelisted in production.
- */
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:3000",
-    credentials: true, // Required to send/receive cookies cross-origin
+    credentials: true,
   })
 );
 
-// ─────────────────────────────────────────────────
-// Body & Cookie Parsers
-// ─────────────────────────────────────────────────
 
-app.use(express.json());                // Parse application/json bodies
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
-app.use(cookieParser());                // Parse Cookie header
-
-// ─────────────────────────────────────────────────
-// HTTP Request Logger
-// ─────────────────────────────────────────────────
+app.use(express.json());               
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());                
 
 if (process.env.NODE_ENV === "development") {
-  app.use(morgan("dev")); // Compact colored output for development
+  app.use(morgan("dev")); 
 }
 
-// ─────────────────────────────────────────────────
-// Health Check
-// ─────────────────────────────────────────────────
 
-/**
- * @route   GET /api/health
- * @desc    Quick server health check (used by load balancers, CI)
- * @access  Public
- */
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
@@ -83,20 +41,12 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// ─────────────────────────────────────────────────
 // API Routes
-// ─────────────────────────────────────────────────
 
 app.use("/api/auth", authRoutes);
+app.use("/api/workspaces", workspaceRoutes);
 
-// ─────────────────────────────────────────────────
-// 404 Handler
-// ─────────────────────────────────────────────────
 
-/**
- * Catches all requests that didn't match any route.
- * Must be placed AFTER all routes.
- */
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -104,18 +54,7 @@ app.use((req, res) => {
   });
 });
 
-// ─────────────────────────────────────────────────
-// Centralized Error Handler
-// ─────────────────────────────────────────────────
 
-/**
- * Express recognizes a middleware with 4 parameters as
- * an error handler. All errors forwarded via next(error)
- * land here.
- *
- * Never leaks stack traces to the client in production.
- */
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   // Log the full error internally
   console.error(`[ERROR] ${err.message}`, {

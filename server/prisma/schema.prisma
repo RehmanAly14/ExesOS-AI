@@ -18,8 +18,27 @@ model User {
   name      String
   email     String   @unique                // Email must be unique across all users
   password  String                          // Hashed password (never plain text)
+
+  workspaces  Workspace[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("users")                            // Maps to "users" table in PostgreSQL
+}
+
+model Workspace {
+  id          String   @id @default(cuid())
+
+  name        String
+  slug        String   @unique
+  description String?
+
+  logo        String?
+
+  ownerId     String
+  owner        User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

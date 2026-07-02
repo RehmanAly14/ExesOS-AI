@@ -16,15 +16,9 @@ const prisma = require("./config/prisma");
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-// ─────────────────────────────────────────────────
-/**
- * Bootstraps the application:
- *  1. Verify database connectivity via Prisma
- *  2. Start the HTTP server
- */
 const startServer = async () => {
   try {
-    // ── 1. Test DB connection ─────────────────────
+   
     await prisma.$connect();
     console.log("✅ Database connected successfully.");
 
@@ -39,19 +33,10 @@ const startServer = async () => {
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error.message);
-    process.exit(1); // Exit with failure code
+    process.exit(1); 
   }
 };
 
-// ─────────────────────────────────────────────────
-// Graceful Shutdown
-// ─────────────────────────────────────────────────
-
-/**
- * On termination signals (SIGTERM from Docker/PM2,
- * SIGINT from Ctrl+C), close the Prisma connection
- * cleanly before exiting.
- */
 const shutdown = async (signal) => {
   console.log(`\n⚠️  ${signal} received. Shutting down gracefully...`);
   await prisma.$disconnect();
