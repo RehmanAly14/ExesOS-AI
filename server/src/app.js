@@ -10,6 +10,7 @@ const morgan = require("morgan");
 // ── Route Imports ─────────────────────────────────
 const authRoutes = require("./modules/auth/auth.routes");
 const workspaceRoutes = require("./modules/workspace/workspaceRoutes");
+const businessRoutes = require("./modules/business/businessRoutes");
 
 const app = express();
 
@@ -45,8 +46,9 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/workspaces", workspaceRoutes);
+app.use("/api/businesses", businessRoutes);
 
-
+ 
 app.use((req, res) => {
   res.status(404).json({
     success: false,

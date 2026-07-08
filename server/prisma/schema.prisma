@@ -39,6 +39,43 @@ model Workspace {
   ownerId     String
   owner        User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
+   businesses Business[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+
+model Business {
+  id            String   @id @default(cuid())
+
+  // Relationships
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Basic Information
+  name          String
+  slug          String   @unique
+  description   String?
+
+  industry      String
+  businessType  String?
+  businessStage String?
+
+  website       String?
+
+  country       String?
+  city          String?
+  timezone      String?
+
+  currency      String?
+  employees     Int?
+
+  // AI Context
+  profile        Json?
+  aiPreferences  Json?
+  aiContext      Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
