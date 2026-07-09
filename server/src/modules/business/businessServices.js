@@ -15,50 +15,51 @@ const createBusiness = async (data, userId) => {
         throw new Error("Workspace not found");
     }
 
+    const {
+        workspaceId,
+        name,
+        description,
+        industry,
+        businessType,
+        businessStage,
+        website,
+        country,
+        city,
+        timezone,
+        currency,
+        employees,
+        profile,
+        aiPreferences
+    } = data;
+
     // Generate slug
     const slug = await generateUniqueSlug(
         prisma.business,
-        data.name
+        name
     );
 
-   await prisma.business.create({
-    data:{
-        workspaceId,
-
-        name,
-
-        slug,
-
-        description,
-
-        industry,
-
-        businessType,
-
-        businessStage,
-
-        website,
-
-        country,
-
-        city,
-
-        timezone,
-
-        currency,
-
-        employees,
-
-        profile: profile || {},
-
-        aiPreferences: aiPreferences || {},
-
-        aiContext:{}
-    }
-});
+    const business = await prisma.business.create({
+        data: {
+            workspaceId,
+            name,
+            slug,
+            description,
+            industry,
+            businessType,
+            businessStage,
+            website,
+            country,
+            city,
+            timezone,
+            currency,
+            employees,
+            profile: profile || {},
+            aiPreferences: aiPreferences || {},
+            aiContext: {}
+        }
+    });
 
     return business;
-
 };
 
 const getWorkspaceBusinesses = async (workspaceId, userId) => {
