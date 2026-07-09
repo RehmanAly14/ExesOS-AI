@@ -76,6 +76,33 @@ model Business {
   aiPreferences  Json?
   aiContext      Json?
 
+  documents     Document[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ──────────────────────────────────────────────────
+// Document Model
+// ──────────────────────────────────────────────────
+model Document {
+  id            String   @id @default(cuid())
+
+  // Relationships
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // File Info
+  filename      String
+  fileType      String                      // pdf | docx | txt
+  storagePath   String                      // local disk path for now (swap for cloud storage later)
+
+  // Extraction
+  extractedText String?  @db.Text
+  status        String   @default("uploaded") // uploaded | processing | extracted | failed
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("documents")
 }

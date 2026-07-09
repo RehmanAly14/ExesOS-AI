@@ -1,0 +1,128 @@
+const fs = require("fs");
+const path = require("path");
+const pdfParse = require("pdf-parse");
+const mammoth = require("mammoth");
+const prisma = require("../../config/prisma");
+
+const EXTRACTABLE_TYPES = {
+    pdf: extractFromPdf,
+    docx: extractFromDocx,
+    txt: extractFromTxt,
+};
+
+async function extractFromPdf(filePath) {
+    const buffer = fs.readFileSync(filePath);
+    const data = await pdfParse(buffer);
+    return data.text;
+}
+
+async function extractFromDocx(filePath) {
+    const buffer = fs.readFileSync(filePath);
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
+}
+
+async function extractFromTxt(filePath) {
+    return fs.readFileSync(filePath, "utf-8");
+}
+
+const verifyBusinessOwnership = async (businessId, userId) => {
+
+    const business = await prisma.business.findFirst({
+        where: {
+            id: businessId,
+            workspace: {
+                ownerId: userId
+            }
+        }
+    });
+
+    if (!business) {
+        throw new Error("Business not found");
+    }
+
+    return business;
+};
+
+const uploadDocument = async (businessId, userId, file) => {
+
+    await verifyBusinessOwnership(businessId, userId);
+
+    const fileType = path.extname(file.originalname).slice(1).toLowerCase();
+
+    const document = await prisma.document.create({
+        data: {
+            businessId,
+            filename: file.originalname,
+            fileType,
+            storagePath: file.path,
+            status: "processing"
+        }
+    });
+
+    try {
+        const extractText = EXTRACTABLE_TYPES[fileType];
+        const extractedText = await extractText(file.path);
+
+        return await prisma.document.update({
+            where: { id: document.id },
+            data: {
+                extractedText,
+                status: "extracted"
+            }
+        });
+    } catch (err) {
+        return await prisma.document.update({
+            where: { id: document.id },
+            data: { status: "failed" }
+        });
+    }
+};
+
+const getBusinessDocuments = async (businessId, userId) => {
+
+    await verifyBusinessOwnership(businessId, userId);
+
+    return prisma.document.findMany({
+        where: { businessId },
+        orderBy: { createdAt: "desc" }
+    });
+};
+
+const getDocumentById = async (id, userId) => {
+
+    const document = await prisma.document.findFirst({
+        where: {
+            id,
+            business: {
+                workspace: {
+                    ownerId: userId
+                }
+            }
+        }
+    });
+
+    if (!document) {
+        throw new Error("Document not found");
+    }
+
+    return document;
+};
+
+const deleteDocument = async (id, userId) => {
+
+    const document = await getDocumentById(id, userId);
+
+    await prisma.document.delete({
+        where: { id }
+    });
+
+    fs.unlink(document.storagePath, () => {});
+};
+
+module.exports = {
+    uploadDocument,
+    getBusinessDocuments,
+    getDocumentById,
+    deleteDocument
+};
