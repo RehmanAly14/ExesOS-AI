@@ -77,6 +77,18 @@ Owner: Owen
 
 ---
 
+### retrieval/
+
+Responsible for:
+- Vector search
+- Context retrieval
+- RAG context packaging
+- Retrieval evaluation design
+
+Owner: Owen
+
+---
+
 ### testing/
 
 Agent testing and validation.
