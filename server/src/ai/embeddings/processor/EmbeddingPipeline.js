@@ -1,18 +1,22 @@
 const axios = require("axios");
 const { RecursiveCharacterChunker } = require("../chunking/RecursiveCharacterChunker");
 const { FireworksEmbeddingProvider } = require("../providers/FireworksEmbeddingProvider");
+const { PostgreSQLVectorStorage } = require("../storage/PostgreSQLVectorStorage");
 const { randomUUID } = require("crypto");
 
 class EmbeddingPipeline {
   /**
    * @param {import('../interfaces/IVectorStorage').IVectorStorage} vectorStorage
    */
+  /**
+   * @param {import('../interfaces/IVectorStorage').IVectorStorage} [vectorStorage]
+   * Defaults to PostgreSQLVectorStorage (MVP). Pass a different IVectorStorage
+   * implementation to swap the vector database without changing pipeline logic.
+   */
   constructor(vectorStorage) {
     this.chunker = new RecursiveCharacterChunker();
     this.embeddingProvider = new FireworksEmbeddingProvider();
-    
-    // TODO: Concrete vector database implementation will be added once the team finalizes the vector database.
-    this.vectorStorage = vectorStorage;
+    this.vectorStorage = vectorStorage || new PostgreSQLVectorStorage();
 
     const port = process.env.PORT || 5000;
     this.apiBaseUrl = process.env.API_BASE_URL || `http://localhost:${port}`;
