@@ -105,8 +105,47 @@ model Document {
   // Embedding pipeline (owned/updated by the embedding service)
   embeddingStatus String @default("pending") // pending | embedded | failed
 
+  chunks        DocumentChunk[]             // Populated by embedding pipeline
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("documents")
+}
+
+// ──────────────────────────────────────────────────
+// DocumentChunk Model
+// Owned by the Embedding Pipeline (Dinesh).
+// Stores text chunks and their vector embeddings.
+//
+// MVP NOTE: `embedding` is stored as Json (float array).
+// This avoids requiring the pgvector extension for now.
+// Migration path: swap `Json` for `Unsupported("vector(768)")` 
+// once pgvector is enabled on the database.
+// ──────────────────────────────────────────────────
+model DocumentChunk {
+  id         String   @id @default(cuid())
+
+  // Relationship back to source document
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  content    String   @db.Text        // Raw text content of this chunk
+  embedding  Json                     // float[] stored as JSON — swap for vector(768) with pgvector
+  chunkIndex Int                      // Sequential position within the document
+
+  // Denormalised metadata for fast retrieval without joins
+  workspaceId  String
+  businessId   String
+  documentType String?
+  mimeType     String?
+  title        String?
+  metadata     Json?                  // Any extra parser-specific fields
+
+  createdAt DateTime @default(now())
+
+  @@index([documentId])
+  @@index([businessId])
+  @@index([workspaceId])
+  @@map("document_chunks")
 }
