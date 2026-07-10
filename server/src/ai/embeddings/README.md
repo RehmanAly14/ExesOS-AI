@@ -17,7 +17,7 @@ This directory contains the complete architecture for the ExesOS AI Embedding Pi
 2. **Document Parsing**: The `parsers` extract clean, unified text and basic metadata from the raw formats.
 3. **Chunking**: The extracted text is divided into semantically intact segments with appropriate token overlaps.
 4. **Embedding Generation**: The chunks are processed by an `IEmbeddingProvider` to produce numerical high-dimensional vectors.
-5. **Vector Storage**: The vectors, along with robust metadata, are constructed according to the `VectorSchema` and written to the database.
+5. **Vector Storage**: The embedding pipeline produces vectors and passes them through the `IVectorStorage` abstraction. The underlying vector database is intentionally left undecided.
 6. **STOP**: The pipeline explicitly terminates here.
 
 ## Ownership
