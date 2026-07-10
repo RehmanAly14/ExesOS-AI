@@ -11,13 +11,26 @@ const validate = require("../../middleware/validate");
 const upload = require("./documentUpload");
 
 const {
-    uploadDocumentValidator
+    uploadDocumentValidator,
+    updateEmbeddingStatusValidator
 } = require("./documentValidators");
+
+const handleUploadError = (err, req, res, next) => {
+    if (err) {
+        const statusCode = err.statusCode || (err.name === "MulterError" ? 400 : 500);
+        return res.status(statusCode).json({
+            success: false,
+            message: err.message
+        });
+    }
+    next();
+};
 
 router.post(
     "/",
     protect,
     upload.single("file"),
+    handleUploadError,
     uploadDocumentValidator,
     validate,
     controller.uploadDocument
@@ -31,6 +44,13 @@ router.get(
     "/:id",
     protect,
     controller.getDocumentById
+);
+router.patch(
+    "/:id/embedding-status",
+    protect,
+    updateEmbeddingStatusValidator,
+    validate,
+    controller.updateEmbeddingStatus
 );
 router.delete(
     "/:id",

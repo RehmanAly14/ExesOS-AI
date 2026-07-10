@@ -95,11 +95,15 @@ model Document {
   // File Info
   filename      String
   fileType      String                      // pdf | docx | txt
+  fileSize      Int                         // size in bytes
   storagePath   String                      // local disk path for now (swap for cloud storage later)
 
   // Extraction
   extractedText String?  @db.Text
   status        String   @default("uploaded") // uploaded | processing | extracted | failed
+
+  // Embedding pipeline (owned/updated by the embedding service)
+  embeddingStatus String @default("pending") // pending | embedded | failed
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

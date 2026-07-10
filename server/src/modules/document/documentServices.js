@@ -55,6 +55,7 @@ const uploadDocument = async (businessId, userId, file) => {
             businessId,
             filename: file.originalname,
             fileType,
+            fileSize: file.size,
             storagePath: file.path,
             status: "processing"
         }
@@ -62,7 +63,16 @@ const uploadDocument = async (businessId, userId, file) => {
 
     try {
         const extractText = EXTRACTABLE_TYPES[fileType];
+
+        if (!extractText) {
+            throw new Error(`Unsupported file type: ${fileType}`);
+        }
+
         const extractedText = await extractText(file.path);
+
+        if (!extractedText || !extractedText.trim()) {
+            throw new Error("No text could be extracted from this file");
+        }
 
         return await prisma.document.update({
             where: { id: document.id },
@@ -79,12 +89,15 @@ const uploadDocument = async (businessId, userId, file) => {
     }
 };
 
-const getBusinessDocuments = async (businessId, userId) => {
+const getBusinessDocuments = async (businessId, userId, status) => {
 
     await verifyBusinessOwnership(businessId, userId);
 
     return prisma.document.findMany({
-        where: { businessId },
+        where: {
+            businessId,
+            ...(status && { status })
+        },
         orderBy: { createdAt: "desc" }
     });
 };
@@ -109,6 +122,16 @@ const getDocumentById = async (id, userId) => {
     return document;
 };
 
+const updateEmbeddingStatus = async (id, userId, embeddingStatus) => {
+
+    const document = await getDocumentById(id, userId);
+
+    return prisma.document.update({
+        where: { id: document.id },
+        data: { embeddingStatus }
+    });
+};
+
 const deleteDocument = async (id, userId) => {
 
     const document = await getDocumentById(id, userId);
@@ -117,12 +140,17 @@ const deleteDocument = async (id, userId) => {
         where: { id }
     });
 
-    fs.unlink(document.storagePath, () => {});
+    fs.unlink(document.storagePath, (err) => {
+        if (err) {
+            console.error(`Failed to delete file ${document.storagePath}:`, err.message);
+        }
+    });
 };
 
 module.exports = {
     uploadDocument,
     getBusinessDocuments,
     getDocumentById,
+    updateEmbeddingStatus,
     deleteDocument
 };
