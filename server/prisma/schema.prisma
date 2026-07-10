@@ -95,6 +95,7 @@ model Document {
   // File Info
   filename      String
   fileType      String                      // pdf | docx | txt
+  fileSize      Int                         // size in bytes
   storagePath   String                      // local disk path for now (swap for cloud storage later)
 
   // Extraction

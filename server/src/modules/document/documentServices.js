@@ -55,6 +55,7 @@ const uploadDocument = async (businessId, userId, file) => {
             businessId,
             filename: file.originalname,
             fileType,
+            fileSize: file.size,
             storagePath: file.path,
             status: "processing"
         }
@@ -62,6 +63,11 @@ const uploadDocument = async (businessId, userId, file) => {
 
     try {
         const extractText = EXTRACTABLE_TYPES[fileType];
+
+        if (!extractText) {
+            throw new Error(`Unsupported file type: ${fileType}`);
+        }
+
         const extractedText = await extractText(file.path);
 
         return await prisma.document.update({
@@ -117,7 +123,11 @@ const deleteDocument = async (id, userId) => {
         where: { id }
     });
 
-    fs.unlink(document.storagePath, () => {});
+    fs.unlink(document.storagePath, (err) => {
+        if (err) {
+            console.error(`Failed to delete file ${document.storagePath}:`, err.message);
+        }
+    });
 };
 
 module.exports = {
