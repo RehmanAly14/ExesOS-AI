@@ -16,7 +16,7 @@ The lifecycle in this module starts strictly after Vector Storage.
 
 1. **User Query**: A CEO or agent workflow provides the user's question and workspace scope.
 2. **Query Embedding**: The embedding pipeline provides the query embedding.
-3. **Vector Search**: Retrieval searches stored vectors within the workspace and optional metadata filters.
+3. **Vector Search**: Retrieval searches stored vectors within the workspace, optional business scope, and optional metadata filters.
 4. **Context Retrieval**: Ranked chunks are selected and prepared with source metadata.
 5. **RAG Context Package**: Retrieved chunks are assembled into a cited context payload for downstream agents.
 6. **STOP**: This module does not generate the final executive answer.

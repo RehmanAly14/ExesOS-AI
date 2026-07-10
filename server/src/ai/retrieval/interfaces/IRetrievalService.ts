@@ -10,6 +10,10 @@ export interface IVectorSearchFilters {
 
 export interface IVectorSearchRequest {
   workspaceId: string;
+  /**
+   * Optional business-level scope inside the workspace.
+   */
+  businessId?: string;
   query: string;
   /**
    * Generated upstream by the embedding pipeline.
@@ -17,7 +21,6 @@ export interface IVectorSearchRequest {
    */
   queryEmbedding: number[];
   topK: number;
-  businessId?: string;
   filters?: IVectorSearchFilters;
 }
 
@@ -38,6 +41,10 @@ export interface IVectorSearchResult {
 
 export interface IRagContextPackage {
   workspaceId: string;
+  /**
+   * Present when retrieval was scoped to one business inside the workspace.
+   */
+  businessId?: string;
   query: string;
   contextText: string;
   sources: ISourceCitation[];
