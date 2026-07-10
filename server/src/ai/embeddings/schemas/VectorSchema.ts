@@ -4,12 +4,18 @@
  */
 export interface IVectorMetadata {
   /**
-   * Unique identifier for the workspace (tenant). 
-   * Crucial for data isolation.
+   * Unique identifier for the workspace (tenant).
+   * workspaceId identifies the tenant/workspace. Crucial for data isolation.
    */
   workspaceId: string;
 
   /**
+   * businessId identifies a specific business within a workspace.
+   */
+  businessId: string;
+
+  /**
+   * documentId identifies the source document.
    * Unique identifier connecting this chunk back to the source document in the primary database.
    */
   documentId: string;
