@@ -11,7 +11,8 @@ const validate = require("../../middleware/validate");
 const upload = require("./documentUpload");
 
 const {
-    uploadDocumentValidator
+    uploadDocumentValidator,
+    updateEmbeddingStatusValidator
 } = require("./documentValidators");
 
 router.post(
@@ -31,6 +32,13 @@ router.get(
     "/:id",
     protect,
     controller.getDocumentById
+);
+router.patch(
+    "/:id/embedding-status",
+    protect,
+    updateEmbeddingStatusValidator,
+    validate,
+    controller.updateEmbeddingStatus
 );
 router.delete(
     "/:id",

@@ -102,6 +102,9 @@ model Document {
   extractedText String?  @db.Text
   status        String   @default("uploaded") // uploaded | processing | extracted | failed
 
+  // Embedding pipeline (owned/updated by the embedding service)
+  embeddingStatus String @default("pending") // pending | embedded | failed
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

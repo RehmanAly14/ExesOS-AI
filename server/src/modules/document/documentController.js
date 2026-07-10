@@ -34,7 +34,8 @@ exports.getBusinessDocuments = async (req, res, next) => {
 
         const documents = await documentService.getBusinessDocuments(
             req.params.businessId,
-            req.user.id
+            req.user.id,
+            req.query.status
         );
 
         res.status(200).json({
@@ -58,6 +59,28 @@ exports.getDocumentById = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
+            data: document
+        });
+
+    } catch (err) {
+        next(err);
+    }
+
+};
+
+exports.updateEmbeddingStatus = async (req, res, next) => {
+
+    try {
+
+        const document = await documentService.updateEmbeddingStatus(
+            req.params.id,
+            req.user.id,
+            req.body.embeddingStatus
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Embedding status updated successfully",
             data: document
         });
 
