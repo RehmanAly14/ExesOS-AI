@@ -15,10 +15,22 @@ const {
     updateEmbeddingStatusValidator
 } = require("./documentValidators");
 
+const handleUploadError = (err, req, res, next) => {
+    if (err) {
+        const statusCode = err.statusCode || (err.name === "MulterError" ? 400 : 500);
+        return res.status(statusCode).json({
+            success: false,
+            message: err.message
+        });
+    }
+    next();
+};
+
 router.post(
     "/",
     protect,
     upload.single("file"),
+    handleUploadError,
     uploadDocumentValidator,
     validate,
     controller.uploadDocument
