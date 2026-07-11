@@ -24,4 +24,4 @@ Each case should define a workspace-scoped query, expected document IDs or chunk
 
 ## Boundary
 
-This directory defines evaluation contracts and strategy only. It does not run executable tests yet.
+This directory defines evaluation contracts, strategy, and focused assert-based checks for retrieval scoring behavior.
