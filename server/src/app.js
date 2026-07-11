@@ -11,6 +11,8 @@ const morgan = require("morgan");
 const authRoutes = require("./modules/auth/auth.routes");
 const workspaceRoutes = require("./modules/workspace/workspaceRoutes");
 const businessRoutes = require("./modules/business/businessRoutes");
+const documentRoutes = require("./modules/document/documentRoutes");
+const chatRoutes = require("./modules/chat/chatRoutes");
 
 const app = express();
 
@@ -47,7 +49,8 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/businesses", businessRoutes);
-
+app.use("/api/chat", chatRoutes);
+app.use("/api/documents", documentRoutes);
  
 app.use((req, res) => {
   res.status(404).json({
