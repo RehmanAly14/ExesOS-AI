@@ -8,9 +8,10 @@ The lifecycle in this module starts strictly after Vector Storage.
 
 ## Folder Responsibilities
 
-- `docs/`: Flow notes for vector search, context retrieval, and RAG context assembly.
+- `docs/`: Flow notes for vector search, context retrieval, RAG context assembly, and PostgreSQL similarity search planning.
 - `evaluation/`: Retrieval quality evaluation strategy.
-- `interfaces/`: TypeScript contracts for retrieval requests, results, context packages, and evaluation cases.
+- `interfaces/`: JavaScript/JSDoc contracts for retrieval requests, results, context packages, and evaluation cases.
+- `services/`: PostgreSQL-backed retrieval implementation.
 
 ## Retrieval/RAG Flow
 

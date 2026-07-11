@@ -19,3 +19,7 @@ If no relevant chunks are found, the context package must set `missingContext` a
 ## Boundary
 
 This module consumes vectors after storage. It does not parse documents, chunk documents, generate embeddings, write vectors, or produce the final answer.
+
+## Implementation Planning
+
+- `PostgreSQLSimilaritySearchPlan.md`: Plan for implementing similarity search against the current PostgreSQL `DocumentChunk` storage.
