@@ -20,6 +20,7 @@ model User {
   password  String                          // Hashed password (never plain text)
 
   workspaces  Workspace[]
+  chatMessages ChatMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -77,6 +78,7 @@ model Business {
   aiContext      Json?
 
   documents     Document[]
+  chatMessages  ChatMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -148,4 +150,26 @@ model DocumentChunk {
   @@index([businessId])
   @@index([workspaceId])
   @@map("document_chunks")
+}
+
+// ──────────────────────────────────────────────────
+// ChatMessage Model
+// Stores persistent chat history per user + business.
+// ──────────────────────────────────────────────────
+model ChatMessage {
+  id         String   @id @default(cuid())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role       String   // user | assistant
+  content    String   @db.Text
+
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, userId, createdAt])
+  @@map("chat_messages")
 }
