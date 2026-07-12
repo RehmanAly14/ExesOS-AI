@@ -17,3 +17,19 @@ exports.chat = async (req, res, next) => {
         next(err);
     }
 };
+
+exports.getChatHistory = async (req, res, next) => {
+    try {
+        const messages = await chatService.getChatHistory({
+            businessId: req.query.businessId,
+            userId: req.user.id,
+        });
+
+        res.status(200).json({
+            success: true,
+            data: messages,
+        });
+    } catch (err) {
+        next(err);
+    }
+};

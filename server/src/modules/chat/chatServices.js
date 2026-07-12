@@ -1,49 +1,221 @@
-const { PostgreSQLRetrievalService } = require("../../ai/retrieval/services/PostgreSQLRetrievalService");
-const { FireworksEmbeddingProvider } = require("../../ai/embeddings/providers/FireworksEmbeddingProvider");
-const agentRouter = require("../../ai/agents/AgentRouter");
 const prisma = require("../../config/prisma");
+const { FireworksEmbeddingProvider } = require("../../ai/embeddings/providers/FireworksEmbeddingProvider");
+const { PostgreSQLRetrievalService } = require("../../ai/retrieval/services/PostgreSQLRetrievalService");
+const agentRouter = require("../../ai/agents/AgentRouter");
 
-const chatWithBusiness = async ({ businessId, message, userId }) => {
-    // 1. Verify business ownership and get workspaceId
-    const business = await prisma.business.findUnique({
-        where: { id: businessId },
-        select: { workspaceId: true }
+const embeddingProvider = new FireworksEmbeddingProvider();
+const retrievalService = new PostgreSQLRetrievalService();
+
+const RETRIEVAL_TOP_K = Number.parseInt(process.env.RETRIEVAL_TOP_K || "5", 10);
+
+const verifyBusinessOwnership = async (businessId, userId) => {
+    const business = await prisma.business.findFirst({
+        where: {
+            id: businessId,
+            workspace: {
+                ownerId: userId
+            }
+        },
+        select: {
+            id: true,
+            name: true,
+            workspaceId: true
+        }
     });
 
     if (!business) {
-        throw new Error("Business not found");
+        const error = new Error("Business not found");
+        error.statusCode = 404;
+        throw error;
     }
 
-    // 2. Retrieve relevant chunks
-    const embeddingProvider = new FireworksEmbeddingProvider();
-    const queryEmbeddings = await embeddingProvider.generateEmbeddingsBatch([message]);
-    const queryEmbedding = queryEmbeddings[0];
+    return business;
+};
 
-    const retrievalService = new PostgreSQLRetrievalService();
-    const ragContext = await retrievalService.buildRagContext({
-        workspaceId: business.workspaceId,
-        businessId,
-        query: message,
-        queryEmbedding,
-        topK: 5
+const formatChatMessage = (message) => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    createdAt: message.createdAt.toISOString(),
+});
+
+const saveChatMessage = async ({ businessId, userId, role, content }) => {
+    const message = await prisma.chatMessage.create({
+        data: {
+            businessId,
+            userId,
+            role,
+            content,
+        },
     });
 
-    // 3. Agent Router
-    const specialistAgent = agentRouter.route(message);
+    return formatChatMessage(message);
+};
 
-    // 4. Send context + question to Agent (which uses Fireworks Chat)
-    const aiResponse = await specialistAgent.generateResponse(message, ragContext.contextText);
+const truncateForLog = (text, maxLength = 120) => {
+    if (!text) return "";
+    return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`;
+};
 
-    // 5. Return AI response
-    return {
-        answer: aiResponse,
+const logRetrievalHits = (businessId, chunks) => {
+    console.log(
+        `[ChatService] Retrieval hit for business ${businessId}: ${chunks.length} chunk(s)`
+    );
+
+    chunks.forEach((chunk, index) => {
+        console.log(
+            `[ChatService]   [${index + 1}] score=${chunk.score.toFixed(4)} ` +
+            `documentId=${chunk.source.documentId} ` +
+            `chunkId=${chunk.source.chunkId} ` +
+            `chunkIndex=${chunk.source.chunkIndex} ` +
+            `title="${chunk.source.title}"`
+        );
+    });
+};
+
+const retrieveContext = async ({ business, message }) => {
+    const emptyResult = {
+        contextText: "",
+        retrievedChunks: [],
+        missingContext: true,
+    };
+
+    try {
+        const [queryEmbedding] = await embeddingProvider.generateEmbeddingsBatch([message]);
+
+        if (!queryEmbedding || queryEmbedding.length === 0) {
+            console.warn(
+                `[ChatService] Retrieval miss for business ${business.id}: failed to generate query embedding`
+            );
+            return emptyResult;
+        }
+
+        const ragContext = await retrievalService.buildRagContext({
+            workspaceId: business.workspaceId,
+            businessId: business.id,
+            query: message,
+            queryEmbedding,
+            topK: RETRIEVAL_TOP_K,
+        });
+
+        if (ragContext.missingContext) {
+            console.log(
+                `[ChatService] Retrieval miss for business ${business.id}: ` +
+                `no relevant chunks for query "${truncateForLog(message)}"`
+            );
+            return emptyResult;
+        }
+
+        logRetrievalHits(business.id, ragContext.retrievedChunks);
+        return ragContext;
+    } catch (error) {
+        console.error(
+            `[ChatService] Retrieval error for business ${business.id}:`,
+            error.message
+        );
+        return emptyResult;
+    }
+};
+
+const formatRetrievalMetadata = (retrievedChunks, missingContext) => ({
+    sourceCount: retrievedChunks.length,
+    missingContext,
+    scores: retrievedChunks.map((chunk) => chunk.score),
+    sources: retrievedChunks.map((chunk) => ({
+        documentId: chunk.source.documentId,
+        chunkId: chunk.source.chunkId,
+        chunkIndex: chunk.source.chunkIndex,
+        title: chunk.source.title,
+        score: chunk.score,
+        contentPreview: chunk.content.slice(0, 200),
+    })),
+});
+
+const getChatHistory = async ({ businessId, userId }) => {
+    if (!businessId) {
+        const error = new Error("businessId is required");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    await verifyBusinessOwnership(businessId, userId);
+
+    const messages = await prisma.chatMessage.findMany({
+        where: {
+            businessId,
+            userId,
+        },
+        orderBy: {
+            createdAt: "asc",
+        },
+        select: {
+            id: true,
+            role: true,
+            content: true,
+            createdAt: true,
+        },
+    });
+
+    return messages.map(formatChatMessage);
+};
+
+const chatWithBusiness = async ({ businessId, message, userId }) => {
+    if (!message || !message.trim()) {
+        const error = new Error("message is required");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!businessId) {
+        const error = new Error("businessId is required");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const business = await verifyBusinessOwnership(businessId, userId);
+    const trimmedMessage = message.trim();
+
+    console.log(
+        `[ChatService] Processing chat for business ${business.id} (${business.name})`
+    );
+
+    const userMessage = await saveChatMessage({
         businessId,
-        message,
+        userId,
+        role: "user",
+        content: trimmedMessage,
+    });
+
+    const ragContext = await retrieveContext({
+        business,
+        message: trimmedMessage,
+    });
+
+    const specialistAgent = agentRouter.route(trimmedMessage);
+    const answer = await specialistAgent.generateResponse(trimmedMessage, ragContext.contextText);
+
+    const assistantMessage = await saveChatMessage({
+        businessId,
+        userId,
+        role: "assistant",
+        content: answer,
+    });
+
+    return {
+        answer,
+        businessId,
+        message: trimmedMessage,
         agent: specialistAgent.role,
-        sources: ragContext.sources || []
+        sources: ragContext.sources || [],
+        retrieval: formatRetrievalMetadata(
+            ragContext.retrievedChunks || [],
+            ragContext.missingContext
+        ),
+        messages: [userMessage, assistantMessage],
     };
 };
 
 module.exports = {
-    chatWithBusiness
+    chatWithBusiness,
+    getChatHistory,
 };
