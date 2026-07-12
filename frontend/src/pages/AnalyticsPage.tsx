@@ -1,195 +1,387 @@
-import { useState } from 'react'
-import { TrendingUp, TrendingDown, Users, DollarSign, Activity, Globe, BarChart3, Filter, Download } from 'lucide-react'
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts'
+  Building2,
+  Briefcase,
+  FileText,
+  MessageSquare,
+  BarChart3,
+  Activity,
+  TrendingUp,
+} from 'lucide-react';
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
+import { usePlatformStats } from '../hooks/usePlatformStats';
+import StatCard from '../components/dashboard/StatCard';
+import EmptyState from '../components/dashboard/EmptyState';
+import SkeletonCard, { ErrorBanner, RefreshButton } from '../components/dashboard/DashboardHelpers';
 
-const revenueData = [
-  { month: 'Jul', revenue: 820, target: 800 },
-  { month: 'Aug', revenue: 932, target: 850 },
-  { month: 'Sep', revenue: 901, target: 900 },
-  { month: 'Oct', revenue: 1134, target: 950 },
-  { month: 'Nov', revenue: 1290, target: 1000 },
-  { month: 'Dec', revenue: 1330, target: 1050 },
-]
+interface TooltipProps {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color: string }>;
+  label?: string;
+}
 
-const channelData = [
-  { channel: 'Organic', value: 35 },
-  { channel: 'Paid', value: 25 },
-  { channel: 'Referral', value: 20 },
-  { channel: 'Direct', value: 12 },
-  { channel: 'Social', value: 8 },
-]
-
-const agentActivityData = [
-  { day: 'Mon', ceo: 40, finance: 24, marketing: 67 },
-  { day: 'Tue', ceo: 30, finance: 53, marketing: 37 },
-  { day: 'Wed', ceo: 20, finance: 38, marketing: 53 },
-  { day: 'Thu', ceo: 27, finance: 43, marketing: 30 },
-  { day: 'Fri', ceo: 18, finance: 50, marketing: 40 },
-  { day: 'Sat', ceo: 23, finance: 21, marketing: 10 },
-  { day: 'Sun', ceo: 34, finance: 18, marketing: 24 },
-]
-
-const kpis = [
-  { label: 'Total Revenue', value: '$1.33M', change: '+12.4%', positive: true, icon: DollarSign, color: 'text-[#4cd7f6]' },
-  { label: 'Active Users', value: '48,290', change: '+8.1%', positive: true, icon: Users, color: 'text-[#0566d9]' },
-  { label: 'Conversion Rate', value: '3.94%', change: '-0.3%', positive: false, icon: Activity, color: 'text-[#d0bcff]' },
-  { label: 'Global Reach', value: '42 Markets', change: '+3 new', positive: true, icon: Globe, color: 'text-[#d0bcff]' },
-]
-
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-2 sm:p-3 rounded-lg">
-        <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#cbc3d7] mb-1">{label}</p>
-        {payload.map((entry: any) => (
-          <p key={entry.name} className="text-xs sm:text-sm font-bold text-[#dae2fd]" style={{ color: entry.color }}>
+        <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#cbc3d7] mb-1">
+          {label}
+        </p>
+        {payload.map((entry) => (
+          <p key={entry.name} className="text-xs sm:text-sm font-bold" style={{ color: entry.color }}>
             {entry.name}: {entry.value}
           </p>
         ))}
       </div>
-    )
+    );
   }
-  return null
-}
+  return null;
+};
 
 export default function AnalyticsPage() {
-  const [activeRange, setActiveRange] = useState('6M')
+  const { stats, isLoading, isRefreshing, error, refresh } = usePlatformStats();
+
+  const hasUploadData = stats.uploadsOverTime.some((d) => d.uploaded > 0 || d.embedded > 0);
+  const hasChatData = stats.chatActivityByDay.some((d) => d.messages > 0);
+  const maxFileType = Math.max(...stats.fileTypeChart.map((c) => c.value), 1);
+
+  const kpis = [
+    {
+      label: 'Workspaces',
+      value: isLoading ? '—' : stats.workspaceCount.toString(),
+      icon: Building2,
+      color: 'text-[#4cd7f6]',
+      available: true,
+    },
+    {
+      label: 'Businesses',
+      value: isLoading ? '—' : stats.businessCount.toString(),
+      icon: Briefcase,
+      color: 'text-[#0566d9]',
+      available: true,
+    },
+    {
+      label: 'Documents Uploaded',
+      value: isLoading ? '—' : stats.documentCount.toString(),
+      icon: FileText,
+      color: 'text-[#d0bcff]',
+      available: true,
+    },
+    {
+      label: 'Chat Queries',
+      value: isLoading ? '—' : stats.chatMessageCount.toString(),
+      icon: MessageSquare,
+      color: 'text-[#d0bcff]',
+      available: true,
+    },
+  ];
+
+  const pipelineKpis = [
+    { label: 'Processed', value: stats.documentsProcessed, color: '#4cd7f6' },
+    { label: 'Embedded', value: stats.documentsEmbedded, color: '#34d399' },
+    { label: 'Pending Embed', value: stats.documentsPending, color: '#fbbf24' },
+    { label: 'Failed', value: stats.documentsFailed, color: '#f87171' },
+  ];
 
   return (
     <div className="p-3 sm:p-6 max-w-[1440px] mx-auto w-full pb-20 md:pb-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-[#dae2fd] mb-1">Detailed Analytics</h1>
-          <p className="text-sm sm:text-base text-[#cbc3d7]">Comprehensive performance metrics across all business units.</p>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-[#dae2fd] mb-1">
+            Detailed Analytics
+          </h1>
+          <p className="text-sm sm:text-base text-[#cbc3d7]">
+            Real-time metrics from your documents, embeddings, and chat activity.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex p-1 bg-[#131b2e] rounded-xl border border-white/10">
-            {['1M', '3M', '6M', '1Y'].map((range) => (
-              <button
-                key={range}
-                onClick={() => setActiveRange(range)}
-                className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all ${
-                  activeRange === range ? 'bg-[#a078ff] text-[#340080]' : 'text-[#cbc3d7] hover:text-[#dae2fd]'
-                }`}
-              >
-                {range}
-              </button>
-            ))}
-          </div>
-          <button className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[#cbc3d7] hover:text-[#d0bcff] transition-colors flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
-            <Filter className="w-3 h-3 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Filter</span>
-          </button>
-          <button className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[#cbc3d7] hover:text-[#d0bcff] transition-colors flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
-            <Download className="w-3 h-3 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Export</span>
-          </button>
+          <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#958ea0] px-3 py-1.5 rounded-lg bg-[#131b2e] border border-white/10">
+            Live Data
+          </span>
+          <RefreshButton onClick={refresh} isRefreshing={isRefreshing} />
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-6 sm:mb-8">
-        {kpis.map((kpi, i) => (
-          <div key={i} className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-3 sm:p-5 rounded-xl">
-            <div className="flex items-start justify-between mb-2 sm:mb-4">
-              <div className={`p-1.5 sm:p-2 rounded-lg bg-[#2d3449] ${kpi.color}`}>
-                <kpi.icon className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <span className={`flex items-center gap-1 text-[10px] sm:text-[11px] font-bold ${kpi.positive ? 'text-[#4cd7f6]' : 'text-rose-400'}`}>
-                {kpi.positive ? <TrendingUp className="w-2 h-2 sm:w-3 sm:h-3" /> : <TrendingDown className="w-2 h-2 sm:w-3 sm:h-3" />}
-                {kpi.change}
-              </span>
-            </div>
-            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#cbc3d7] mb-0.5 sm:mb-1">{kpi.label}</p>
-            <p className="text-lg sm:text-2xl font-bold text-[#dae2fd]">{kpi.value}</p>
-          </div>
+      {error && <ErrorBanner message={error} onRetry={refresh} />}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-6 sm:mb-8">
+        {kpis.map((kpi) => (
+          <StatCard
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value}
+            icon={<kpi.icon className="w-5 h-5" />}
+            isLoading={isLoading}
+          />
         ))}
       </div>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
-        {/* Revenue vs Target - Wide */}
-        <div className="lg:col-span-2 bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-4 sm:p-6 rounded-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 sm:mb-6">
-            <h3 className="text-lg sm:text-2xl font-semibold text-[#dae2fd]">Revenue vs Target</h3>
-            <span className="text-xs sm:text-sm text-[#958ea0]">Jul – Dec 2024</span>
-          </div>
-          <div className="w-full h-[200px] sm:h-[240px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#d0bcff" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#d0bcff" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4cd7f6" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#4cd7f6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(73,68,84,0.3)" />
-                <XAxis dataKey="month" stroke="#958ea0" tick={{ fontSize: 10 }} />
-                <YAxis stroke="#958ea0" tick={{ fontSize: 10 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: '10px' }} />
-                <Area type="monotone" dataKey="revenue" stroke="#d0bcff" strokeWidth={2} fill="url(#colorRevenue)" name="Revenue ($k)" />
-                <Area type="monotone" dataKey="target" stroke="#4cd7f6" strokeWidth={2} strokeDasharray="4 4" fill="url(#colorTarget)" name="Target ($k)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Channel Distribution */}
-        <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-4 sm:p-6 rounded-2xl">
-          <h3 className="text-lg sm:text-2xl font-semibold text-[#dae2fd] mb-4 sm:mb-6">Traffic Channels</h3>
-          <div className="space-y-3 sm:space-y-4">
-            {channelData.map((ch, i) => (
-              <div key={i}>
-                <div className="flex justify-between text-xs sm:text-sm mb-1">
-                  <span className="text-[#cbc3d7]">{ch.channel}</span>
-                  <span className="font-bold text-[#dae2fd]">{ch.value}%</span>
-                </div>
-                <div className="w-full bg-[#2d3449] h-1 sm:h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${ch.value}%`,
-                      background: ['#d0bcff', '#4cd7f6', '#adc6ff', '#a078ff', '#6d3bd7'][i]
-                    }}
-                  />
-                </div>
+      {!isLoading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-6 sm:mb-8">
+          {pipelineKpis.map((kpi) => (
+            <div
+              key={kpi.label}
+              className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 p-3 sm:p-4 rounded-xl"
+            >
+              <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#cbc3d7] mb-1">
+                {kpi.label}
+              </p>
+              <p className="text-lg sm:text-2xl font-bold text-[#dae2fd]">{kpi.value}</p>
+              <div className="w-full bg-[#2d3449] h-1 rounded-full mt-2 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: stats.documentCount
+                      ? `${Math.min(100, (kpi.value / stats.documentCount) * 100)}%`
+                      : '0%',
+                    background: kpi.color,
+                  }}
+                />
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        {isLoading ? (
+          <>
+            <SkeletonCard className="lg:col-span-2" lines={1} />
+            <SkeletonCard lines={4} />
+          </>
+        ) : (
+          <>
+            <div className="lg:col-span-2 bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-4 sm:p-6 rounded-2xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 sm:mb-6">
+                <h3 className="text-lg sm:text-2xl font-semibold text-[#dae2fd]">
+                  Document Uploads Over Time
+                </h3>
+                <span className="text-xs sm:text-sm text-[#958ea0]">Last 6 months</span>
+              </div>
+              {!hasUploadData ? (
+                <EmptyState
+                  icon={<TrendingUp className="w-5 h-5" />}
+                  title="No upload history yet"
+                  description="Document upload trends will appear here once you upload files."
+                />
+              ) : (
+                <div className="w-full h-[200px] sm:h-[240px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={stats.uploadsOverTime}>
+                      <defs>
+                        <linearGradient id="colorUploaded" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#d0bcff" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#d0bcff" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="colorEmbedded" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4cd7f6" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#4cd7f6" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(73,68,84,0.3)" />
+                      <XAxis dataKey="month" stroke="#958ea0" tick={{ fontSize: 10 }} />
+                      <YAxis stroke="#958ea0" tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: '10px' }} />
+                      <Area
+                        type="monotone"
+                        dataKey="uploaded"
+                        stroke="#d0bcff"
+                        strokeWidth={2}
+                        fill="url(#colorUploaded)"
+                        name="Uploaded"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="embedded"
+                        stroke="#4cd7f6"
+                        strokeWidth={2}
+                        fill="url(#colorEmbedded)"
+                        name="Embedded"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-4 sm:p-6 rounded-2xl">
+              <h3 className="text-lg sm:text-2xl font-semibold text-[#dae2fd] mb-4 sm:mb-6">
+                File Types
+              </h3>
+              {stats.fileTypeChart.length === 0 ? (
+                <EmptyState
+                  icon={<FileText className="w-5 h-5" />}
+                  title="No documents"
+                  description="Upload files to see type distribution."
+                />
+              ) : (
+                <div className="space-y-3 sm:space-y-4">
+                  {stats.fileTypeChart.map((item) => (
+                    <div key={item.label}>
+                      <div className="flex justify-between text-xs sm:text-sm mb-1">
+                        <span className="text-[#cbc3d7]">{item.label}</span>
+                        <span className="font-bold text-[#dae2fd]">{item.value}</span>
+                      </div>
+                      <div className="w-full bg-[#2d3449] h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${(item.value / maxFileType) * 100}%`,
+                            background: item.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Agent Activity Chart */}
-      <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-4 sm:p-6 rounded-2xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 sm:mb-6">
-          <h3 className="text-lg sm:text-2xl font-semibold text-[#dae2fd] flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-[#d0bcff]" />
-            Agent Activity (Tasks Completed)
-          </h3>
-          <span className="text-xs sm:text-sm text-[#958ea0]">This Week</span>
-        </div>
-        <div className="w-full h-[180px] sm:h-[200px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={agentActivityData} barSize={6} barGap={3}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(73,68,84,0.3)" />
-              <XAxis dataKey="day" stroke="#958ea0" tick={{ fontSize: 10 }} />
-              <YAxis stroke="#958ea0" tick={{ fontSize: 10 }} />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize: '10px' }} />
-              <Bar dataKey="ceo" fill="#d0bcff" radius={[4, 4, 0, 0]} name="CEO Agent" />
-              <Bar dataKey="finance" fill="#4cd7f6" radius={[4, 4, 0, 0]} name="Finance Agent" />
-              <Bar dataKey="marketing" fill="#adc6ff" radius={[4, 4, 0, 0]} name="Marketing Agent" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        {isLoading ? (
+          <>
+            <SkeletonCard lines={1} />
+            <SkeletonCard lines={1} />
+          </>
+        ) : (
+          <>
+            <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-4 sm:p-6 rounded-2xl">
+              <h3 className="text-lg sm:text-2xl font-semibold text-[#dae2fd] mb-4 sm:mb-6">
+                Document Status
+              </h3>
+              {stats.documentStatusChart.length === 0 ? (
+                <EmptyState title="No status data" description="Upload documents to see processing status." />
+              ) : (
+                <div className="space-y-3">
+                  {stats.documentStatusChart.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between">
+                      <span className="text-sm text-[#cbc3d7]">{item.label}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 sm:w-32 bg-[#2d3449] h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: stats.documentCount
+                                ? `${(item.value / stats.documentCount) * 100}%`
+                                : '0%',
+                              background: item.color,
+                            }}
+                          />
+                        </div>
+                        <span className="text-sm font-bold text-[#dae2fd] w-6 text-right">
+                          {item.value}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-4 sm:p-6 rounded-2xl">
+              <h3 className="text-lg sm:text-2xl font-semibold text-[#dae2fd] mb-4 sm:mb-6">
+                Embedding Status
+              </h3>
+              {stats.embeddingStatusChart.length === 0 ? (
+                <EmptyState title="No embedding data" description="Documents will show embedding progress here." />
+              ) : (
+                <div className="space-y-3">
+                  {stats.embeddingStatusChart.map((item) => (
+                    <div key={item.label} className="flex items-center justify-between">
+                      <span className="text-sm text-[#cbc3d7]">{item.label}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 sm:w-32 bg-[#2d3449] h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: stats.documentCount
+                                ? `${(item.value / stats.documentCount) * 100}%`
+                                : '0%',
+                              background: item.color,
+                            }}
+                          />
+                        </div>
+                        <span className="text-sm font-bold text-[#dae2fd] w-6 text-right">
+                          {item.value}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
+
+      {isLoading ? (
+        <SkeletonCard lines={1} />
+      ) : (
+        <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-4 sm:p-6 rounded-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 sm:mb-6">
+            <h3 className="text-lg sm:text-2xl font-semibold text-[#dae2fd] flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-[#d0bcff]" />
+              Chat Activity by Day
+            </h3>
+            <span className="text-xs sm:text-sm text-[#958ea0]">All time · by weekday</span>
+          </div>
+          {!hasChatData ? (
+            <EmptyState
+              icon={<Activity className="w-5 h-5" />}
+              title="No chat activity yet"
+              description="Start a conversation with your AI agents to see activity patterns."
+            />
+          ) : (
+            <div className="w-full h-[180px] sm:h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.chatActivityByDay} barSize={20}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(73,68,84,0.3)" />
+                  <XAxis dataKey="day" stroke="#958ea0" tick={{ fontSize: 10 }} />
+                  <YAxis stroke="#958ea0" tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="messages" fill="#d0bcff" radius={[4, 4, 0, 0]} name="Messages" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!isLoading && (
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Revenue', note: 'Coming Soon' },
+            { label: 'Active Users', note: 'Coming Soon' },
+            { label: 'Conversion Rate', note: 'Coming Soon' },
+            { label: 'Global Reach', note: 'Coming Soon' },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="bg-[rgba(23,31,51,0.5)] border border-white/5 p-3 rounded-xl opacity-60"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#958ea0]">
+                {item.label}
+              </p>
+              <p className="text-lg font-bold text-[#958ea0] mt-1">--</p>
+              <p className="text-[10px] text-[#958ea0]">{item.note}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
-  )
+  );
 }

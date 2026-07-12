@@ -1,6 +1,6 @@
-import { Bell, Search, ChevronDown, Users, Menu, LogOut } from "lucide-react";
+import { Bell, Search, ChevronDown, Users, Menu, LogOut, Zap } from "lucide-react";
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 interface TopNavbarProps {
@@ -62,7 +62,9 @@ export default function TopNavbar({ onMenuClick }: TopNavbarProps) {
           <Menu size={22} className="sm:size-6" />
         </button>
 
-        <div className="min-w-0">
+       
+
+        <div className="min-w-0 border-l border-white/10 pl-3 sm:pl-4">
           <h1 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight text-[#dae2fd] truncate">
             {currentPage.title}
           </h1>
@@ -71,12 +73,7 @@ export default function TopNavbar({ onMenuClick }: TopNavbarProps) {
           </p>
         </div>
         
-        {/* Workspace Switcher */}
-        <button className="hidden lg:flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-sm text-[#cbc3d7] transition hover:bg-white/5 hover:text-[#dae2fd] whitespace-nowrap">
-          <Users size={14} />
-          <span>Team Workspace</span>
-          <ChevronDown size={14} className="opacity-50" />
-        </button>
+       
       </div>
 
       {/* Right Section */}
@@ -129,14 +126,7 @@ export default function TopNavbar({ onMenuClick }: TopNavbarProps) {
           )}
         </div>
 
-        {/* Save Changes Button */}
-        <button className="hidden sm:flex relative overflow-hidden rounded-xl bg-gradient-to-r from-violet-400 to-violet-600 px-3 sm:px-4 lg:px-6 py-1.5 sm:py-2 lg:py-3 font-semibold text-[#340080] transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(208,188,255,0.25)] active:scale-[0.98] text-xs sm:text-sm">
-          <span className="relative flex items-center gap-2 whitespace-nowrap">
-            Save Changes
-            <span className="hidden text-xs opacity-70 lg:inline">⌘S</span>
-          </span>
-          <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 hover:translate-x-full" />
-        </button>
+       
 
         {/* User Avatar + Dropdown */}
         <div className="relative hidden sm:block">

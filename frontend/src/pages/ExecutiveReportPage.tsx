@@ -1,198 +1,301 @@
-import { useState } from 'react'
-import { Download, Eye, Share2, FileText, BarChart2, Globe, TrendingUp, Star, ChevronRight, Zap, Calendar } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  Zap,
+  Calendar,
+  Building2,
+  Eye,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  X,
+  ChevronRight,
+  Sparkles,
+  FileText,
+  Activity,
+  Shield,
+  Target,
+} from 'lucide-react'
+import { useWorkspaces } from '../hooks/useWorkspaces'
+import { useReports } from '../hooks/useReports'
+import ExecutiveReportLoadingDialog from '../components/reports/ExecutiveReportLoadingDialog'
+import ExecutiveReportView from '../components/reports/ExecutiveReportView'
+import { getReportById, type ReportDetail } from '../services/reportService'
 
-const reports = [
-  {
-    id: 1,
-    title: 'Q3 Operations Review',
-    subtitle: 'Comprehensive overview of Q3 2024 performance metrics and strategic insights.',
-    date: 'October 2024',
-    size: '12MB',
-    icon: BarChart2,
-    color: 'text-[#d0bcff]',
-    bg: 'bg-[#d0bcff]/10',
-    status: 'Latest',
-    statusColor: 'text-[#d0bcff] bg-[#d0bcff]/10',
-    score: 94,
-    scoreColor: 'text-[#4cd7f6]',
-    highlights: ['Revenue exceeded target by 12.4%', 'Agent deployment efficiency at 99.2%', '3 critical risks mitigated proactively'],
-  },
-  {
-    id: 2,
-    title: 'Risk Exposure Analysis v2',
-    subtitle: 'Deep-dive risk assessment across supply chain, financial, and regulatory vectors.',
-    date: 'Yesterday',
-    size: '4.5MB',
-    icon: TrendingUp,
-    color: 'text-rose-400',
-    bg: 'bg-rose-500/10',
-    status: 'High Priority',
-    statusColor: 'text-rose-400 bg-rose-500/10',
-    score: 78,
-    scoreColor: 'text-[#0566d9]',
-    highlights: ['Supply chain risk: Medium (2 vendors flagged)', 'Financial exposure reduced to $220k', 'Regulatory compliance: 98% across all markets'],
-  },
-  {
-    id: 3,
-    title: 'Market Expansion AI Report',
-    subtitle: 'AI-generated market entry analysis for APAC region with tactical recommendations.',
-    date: 'Oct 20, 2024',
-    size: '22MB',
-    icon: Globe,
-    color: 'text-[#4cd7f6]',
-    bg: 'bg-[#4cd7f6]/10',
-    status: 'Strategic',
-    statusColor: 'text-[#4cd7f6] bg-[#4cd7f6]/10',
-    score: 88,
-    scoreColor: 'text-[#d0bcff]',
-    highlights: ['3 high-opportunity markets identified', 'ROI projection: $4.2M in 18 months', 'Competitive advantage window: 6-8 months'],
-  },
-]
-
-const kpiSummary = [
-  { label: 'Business Health', value: 92, suffix: '/100', color: '#d0bcff', desc: 'Optimized' },
-  { label: 'Revenue Growth', value: 12.4, suffix: '%', color: '#4cd7f6', desc: 'Above target' },
-  { label: 'Risk Level', value: 8, suffix: '/100', color: '#ffb4ab', desc: 'Low risk' },
-  { label: 'Agent Efficiency', value: 99.2, suffix: '%', color: '#adc6ff', desc: 'Fully autonomous' },
-]
+function getRiskLevel(health: number | null) {
+  if (health == null) return '—'
+  if (health >= 75) return 'Low'
+  if (health >= 50) return 'Medium'
+  return 'High'
+}
 
 export default function ExecutiveReportPage() {
-  const [selectedReport, setSelectedReport] = useState(reports[0])
+  const navigate = useNavigate()
+  const { workspaces } = useWorkspaces()
+  const [allBusinesses, setAllBusinesses] = useState<{ id: string; name: string; workspaceId: string }[]>([])
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null)
+  const [prompt, setPrompt] = useState('Generate an executive report on our current business performance, risks, and priorities.')
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null)
+  const [selectedReportDetail, setSelectedReportDetail] = useState<ReportDetail | null>(null)
+  const [loadingStep, setLoadingStep] = useState(1)
+
+  const {
+    reports,
+    isLoading,
+    isGenerating,
+    error,
+    generateReport,
+    removeReport,
+    clearError,
+  } = useReports(selectedBusinessId)
+
+  useEffect(() => {
+    if (workspaces.length === 0) return
+    import('../services/businessService').then(({ getWorkspaceBusinesses }) => {
+      Promise.allSettled(workspaces.map((ws) => getWorkspaceBusinesses(ws.id))).then((results) => {
+        const all: { id: string; name: string; workspaceId: string }[] = []
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            result.value.forEach((business) =>
+              all.push({ id: business.id, name: business.name, workspaceId: workspaces[index].id })
+            )
+          }
+        })
+        setAllBusinesses(all)
+        if (!selectedBusinessId && all.length > 0) {
+          setSelectedBusinessId(all[0].id)
+        }
+      })
+    })
+  }, [workspaces, selectedBusinessId])
+
+  useEffect(() => {
+    if (reports.length > 0 && !selectedReportId) {
+      setSelectedReportId(reports[0].id)
+    }
+    if (reports.length > 0 && selectedReportId && !reports.find((r) => r.id === selectedReportId)) {
+      setSelectedReportId(reports[0].id)
+    }
+    if (reports.length === 0) {
+      setSelectedReportId(null)
+      setSelectedReportDetail(null)
+    }
+  }, [reports, selectedReportId])
+
+  useEffect(() => {
+    if (!selectedReportId) {
+      setSelectedReportDetail(null)
+      return
+    }
+    getReportById(selectedReportId)
+      .then(setSelectedReportDetail)
+      .catch(() => setSelectedReportDetail(null))
+  }, [selectedReportId])
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setLoadingStep(1)
+      return
+    }
+
+    setLoadingStep(1)
+    const timers = [
+      setTimeout(() => setLoadingStep(2), 2500),
+      setTimeout(() => setLoadingStep(3), 6000),
+      setTimeout(() => setLoadingStep(4), 10000),
+    ]
+
+    return () => timers.forEach(clearTimeout)
+  }, [isGenerating])
+
+  const selectedReport = reports.find((report) => report.id === selectedReportId) || null
+  const selectedBusiness = allBusinesses.find((b) => b.id === selectedBusinessId)
+
+  const handleGenerate = async () => {
+    if (!selectedBusinessId || !prompt.trim()) return
+    const report = await generateReport(prompt)
+    if (report) {
+      setSelectedReportId(report.id)
+      setSelectedReportDetail(report)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    await removeReport(id)
+  }
+
+  const latestHealth = selectedReport?.businessHealth ?? reports[0]?.businessHealth ?? null
+  const latestConfidence = selectedReport?.confidence ?? reports[0]?.confidence ?? null
 
   return (
     <div className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 pb-20 overflow-x-hidden">
-      {/* Header */}
+      <ExecutiveReportLoadingDialog open={isGenerating} activeStep={loadingStep} />
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-[#dae2fd] mb-1">Executive Reports</h1>
-          <p className="text-sm text-[#cbc3d7]">AI-synthesized intelligence briefings for leadership decisions.</p>
+          <p className="text-sm text-[#cbc3d7]">ExecOS AI intelligence briefings for leadership decisions.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] px-4 py-2 rounded-xl">
-            <Calendar className="w-4 h-4 text-[#d0bcff]" />
-            <span className="text-sm font-mono text-[#dae2fd]">Oct 2024</span>
+        <button
+          onClick={handleGenerate}
+          disabled={!selectedBusinessId || isGenerating}
+          className="bg-[#a078ff] text-[#340080] px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:brightness-110 transition-all whitespace-nowrap disabled:opacity-50"
+        >
+          {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+          {isGenerating ? 'Generating...' : 'Generate Executive Report'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="mb-6 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-red-300">
+          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+          <p className="flex-1 text-sm">{error}</p>
+          <button onClick={clearError}><X size={14} /></button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+        <div className="lg:col-span-2 space-y-3">
+          <label className="text-xs font-semibold uppercase tracking-wider text-[#cbc3d7]">Business Context</label>
+          <select
+            value={selectedBusinessId || ''}
+            onChange={(e) => setSelectedBusinessId(e.target.value || null)}
+            className="w-full bg-[rgba(23,31,51,0.72)] border border-white/10 rounded-xl px-4 py-3 text-sm text-[#dae2fd]"
+          >
+            {allBusinesses.length === 0 && <option value="">No businesses found</option>}
+            {allBusinesses.map((business) => (
+              <option key={business.id} value={business.id}>{business.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-[rgba(23,31,51,0.72)] border border-violet-400/20 rounded-xl p-4">
+            <p className="text-[10px] uppercase tracking-wider text-violet-300 mb-1 flex items-center gap-1">
+              <Activity size={10} /> Health
+            </p>
+            <p className="text-xl font-bold text-[#dae2fd]">{latestHealth ?? '—'}{latestHealth != null ? '/100' : ''}</p>
           </div>
-          <button className="bg-[#a078ff] text-[#340080] px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 hover:brightness-110 transition-all whitespace-nowrap">
-            <Zap className="w-4 h-4" />
-            Generate
-          </button>
+          <div className="bg-[rgba(23,31,51,0.72)] border border-cyan-400/20 rounded-xl p-4">
+            <p className="text-[10px] uppercase tracking-wider text-cyan-300 mb-1 flex items-center gap-1">
+              <Target size={10} /> Confidence
+            </p>
+            <p className="text-xl font-bold text-cyan-300">
+              {latestConfidence != null ? `${Math.round(latestConfidence * 100)}%` : '—'}
+            </p>
+          </div>
+          <div className="bg-[rgba(23,31,51,0.72)] border border-amber-400/20 rounded-xl p-4">
+            <p className="text-[10px] uppercase tracking-wider text-amber-300 mb-1 flex items-center gap-1">
+              <Shield size={10} /> Risk
+            </p>
+            <p className="text-xl font-bold text-[#dae2fd]">{getRiskLevel(latestHealth)}</p>
+          </div>
         </div>
       </div>
 
-      {/* KPI Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-        {kpiSummary.map((kpi, i) => (
-          <div key={i} className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-3 sm:p-4 rounded-xl">
-            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#cbc3d7] mb-1">{kpi.label}</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg sm:text-xl font-bold" style={{ color: kpi.color }}>{kpi.value}</span>
-              <span className="text-xs sm:text-sm text-[#958ea0]">{kpi.suffix}</span>
-            </div>
-            <p className="text-[10px] text-[#cbc3d7] mt-0.5">{kpi.desc}</p>
-            <div className="mt-2 h-1 w-full bg-[#2d3449] rounded-full overflow-hidden">
-              <div className="h-full rounded-full" style={{ width: `${Math.min(kpi.value, 100)}%`, background: kpi.color }} />
-            </div>
-          </div>
-        ))}
+      <div className="mb-8">
+        <label className="text-xs font-semibold uppercase tracking-wider text-[#cbc3d7] mb-2 block">Report Prompt</label>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={3}
+          className="w-full bg-[rgba(23,31,51,0.72)] border border-white/10 rounded-xl px-4 py-3 text-sm text-[#dae2fd] resize-none"
+          placeholder="Describe what executive analysis you need..."
+        />
       </div>
 
-      {/* Reports Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-        {/* Report List */}
-        <div className="space-y-3 sm:space-y-4">
-          <h2 className="text-lg sm:text-xl font-semibold text-[#dae2fd] mb-2">Available Reports</h2>
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold text-[#dae2fd]">Saved Reports</h2>
+
+          {isLoading && (
+            <div className="flex items-center gap-2 text-[#cbc3d7] py-8 justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-violet-300" />
+              Loading reports...
+            </div>
+          )}
+
+          {!isLoading && reports.length === 0 && (
+            <div className="rounded-xl border border-violet-400/20 bg-violet-500/5 p-6 text-center">
+              <Sparkles className="w-8 h-8 text-violet-300/50 mx-auto mb-2" />
+              <p className="text-sm text-[#cbc3d7]">No reports yet for {selectedBusiness?.name || 'this business'}.</p>
+              <p className="text-xs text-[#958ea0] mt-1">Click Generate to create your first executive report.</p>
+            </div>
+          )}
+
           {reports.map((report) => (
             <button
               key={report.id}
-              onClick={() => setSelectedReport(report)}
-              className={`w-full text-left bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-3 sm:p-4 rounded-xl transition-all ${
-                selectedReport.id === report.id ? 'ring-2 ring-[#d0bcff]/50 bg-[#d0bcff]/5' : ''
+              onClick={() => setSelectedReportId(report.id)}
+              className={`w-full text-left bg-[rgba(23,31,51,0.72)] border border-white/10 p-4 rounded-xl transition-all ${
+                selectedReportId === report.id ? 'ring-2 ring-violet-400/40 bg-violet-500/5' : ''
               }`}
             >
-              <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg ${report.bg} flex items-center justify-center flex-shrink-0`}>
-                  <report.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${report.color}`} />
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-violet-500/15 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-4 h-4 text-violet-300" />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-[#dae2fd] truncate">{report.title}</p>
-                  <p className="text-xs text-[#958ea0]">{report.date} · {report.size}</p>
+                  <p className="text-xs text-[#958ea0] mt-0.5">
+                    {new Date(report.createdAt).toLocaleDateString()} · {report.businessName}
+                  </p>
+                  <p className="text-xs text-[#cbc3d7] mt-2 line-clamp-2">{report.executiveSummary}</p>
                 </div>
               </div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${report.statusColor} uppercase tracking-wider`}>
-                {report.status}
-              </span>
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {report.businessHealth != null && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300">
+                    Health {report.businessHealth}
+                  </span>
+                )}
+                {report.confidence != null && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300">
+                    {Math.round(report.confidence * 100)}% conf.
+                  </span>
+                )}
+              </div>
             </button>
           ))}
         </div>
 
-        {/* Report Detail */}
-        <div className="lg:col-span-2 bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-4 sm:p-6 rounded-2xl">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${selectedReport.bg} flex items-center justify-center flex-shrink-0`}>
-                <selectedReport.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${selectedReport.color}`} />
-              </div>
-              <div>
-                <h3 className="text-lg sm:text-xl font-semibold text-[#dae2fd]">{selectedReport.title}</h3>
-                <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${selectedReport.statusColor} uppercase tracking-wider`}>
-                    {selectedReport.status}
-                  </span>
-                  <span className="text-xs text-[#958ea0]">{selectedReport.date}</span>
+        <div className="lg:col-span-2 bg-[rgba(23,31,51,0.72)] border border-white/10 rounded-2xl p-5 sm:p-6 min-h-[400px]">
+          {!selectedReport || !selectedReportDetail ? (
+            <div className="h-full flex items-center justify-center text-[#958ea0] text-sm">
+              {selectedReport && !selectedReportDetail ? (
+                <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading report...</span>
+              ) : (
+                'Select a report or generate a new one'
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-[#dae2fd]">{selectedReportDetail.title}</h3>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-[#958ea0] mt-1">
+                    <span className="inline-flex items-center gap-1"><Calendar size={12} />{new Date(selectedReportDetail.createdAt).toLocaleString()}</span>
+                    <span className="inline-flex items-center gap-1"><Building2 size={12} />{selectedReportDetail.businessName}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => navigate(`/report/${selectedReport.id}`)}
+                    className="px-3 py-2 rounded-lg bg-violet-500/15 text-violet-300 text-xs font-semibold flex items-center gap-1 hover:bg-violet-500/25"
+                  >
+                    <Eye size={14} /> Full View
+                  </button>
+                  <button
+                    onClick={() => handleDelete(selectedReport.id)}
+                    className="px-3 py-2 rounded-lg bg-red-500/10 text-red-300 text-xs font-semibold flex items-center gap-1 hover:bg-red-500/20"
+                  >
+                    <Trash2 size={14} /> Delete
+                  </button>
                 </div>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <button className="p-1.5 sm:p-2 hover:bg-white/5 rounded-lg text-[#cbc3d7] hover:text-[#d0bcff] transition-colors">
-                <Share2 className="w-4 h-4" />
-              </button>
-              <button className="p-1.5 sm:p-2 hover:bg-white/5 rounded-lg text-[#cbc3d7] hover:text-[#d0bcff] transition-colors">
-                <Download className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
 
-          <p className="text-sm text-[#cbc3d7] mb-4 sm:mb-6">{selectedReport.subtitle}</p>
-
-          {/* AI Score */}
-          <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-3 sm:p-4 rounded-xl mb-4 sm:mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#cbc3d7]">AI Confidence Score</span>
-              <span className={`text-lg sm:text-xl font-bold ${selectedReport.scoreColor}`}>{selectedReport.score}/100</span>
-            </div>
-            <div className="w-full bg-[#2d3449] h-1.5 sm:h-2 rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${selectedReport.score}%`, background: 'linear-gradient(90deg, #d0bcff, #4cd7f6)' }}
-              />
-            </div>
-          </div>
-
-          {/* Key Highlights */}
-          <div>
-            <h4 className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#cbc3d7] mb-3 flex items-center gap-2">
-              <Star className="w-3 h-3 sm:w-4 sm:h-4" />
-              KEY HIGHLIGHTS
-            </h4>
-            <div className="space-y-2 sm:space-y-3">
-              {selectedReport.highlights.map((highlight, i) => (
-                <div key={i} className="flex items-start gap-2 sm:gap-3 bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-2.5 sm:p-3 rounded-lg">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#d0bcff] mt-1.5 flex-shrink-0" />
-                  <p className="text-xs sm:text-sm text-[#dae2fd]">{highlight}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-4 sm:mt-6">
-            <button className="w-full sm:flex-1 py-2.5 sm:py-3 bg-[#a078ff] text-[#340080] rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:brightness-110 transition-all">
-              <Eye className="w-3 h-3 sm:w-4 sm:h-4" /> View Full Report
-            </button>
-            <button className="w-full sm:flex-1 py-2.5 sm:py-3 bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 hover:border-[#d0bcff]/30 transition-all text-[#cbc3d7]">
-              <Download className="w-3 h-3 sm:w-4 sm:h-4" /> Download PDF
-            </button>
-          </div>
+              <ExecutiveReportView report={selectedReportDetail} />
+            </>
+          )}
         </div>
       </div>
     </div>

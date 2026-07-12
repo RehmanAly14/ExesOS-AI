@@ -10,9 +10,9 @@ import WorkspacePage from './pages/WorkspacePage'
 import BusinessPage from './pages/BusinessPage'
 import UploadDocumentsPage from './pages/UploadDocumentsPage'
 import ChatPage from './pages/ChatPage'
-import ProjectsPage from './pages/ProjectsPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import ExecutiveReportPage from './pages/ExecutiveReportPage'
+import ReportDetailPage from './pages/ReportDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import AppLayout from './components/layout/AppLayout'
 
@@ -42,9 +42,10 @@ function App() {
 
               {/* Other Routes */}
               <Route path="/chat" element={<ChatPage />} />
-              <Route path="/projects" element={<ProjectsPage />} />
+             
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/reports" element={<ExecutiveReportPage />} />
+              <Route path="/report/:id" element={<ReportDetailPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>

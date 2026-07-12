@@ -9,8 +9,6 @@ import {
   Bot,
   BarChart2,
   Megaphone,
-  Search,
-  Shield,
   Sparkles,
   Loader2,
   Menu,
@@ -23,6 +21,7 @@ import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { useChat, type ChatMessage } from '../hooks/useChat'
 import { useWorkspaces } from '../hooks/useWorkspaces'
 import { useAuth } from '../context/AuthContext'
+import MarkdownRenderer from '../components/ui/MarkdownRenderer'
 
 // ── Static UI data (visual only) ──────────────────
 
@@ -67,7 +66,7 @@ function AIBubble({ message }: { message: ChatMessage }) {
             <span className="text-xs font-semibold uppercase tracking-wider text-violet-300">ExecOS AI</span>
           </div>
           <p className="text-sm sm:text-base text-[#dae2fd] leading-relaxed whitespace-pre-wrap break-words">
-            {message.content}
+            <MarkdownRenderer content={message.content} />
           </p>
         </div>
         <p className="text-[10px] text-[#958ea0] px-1">
@@ -291,7 +290,7 @@ export default function ChatPage() {
   const handleInput = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`
     }
   }
 
@@ -330,17 +329,17 @@ export default function ChatPage() {
     !isSending
 
   return (
-    <div className="flex h-full bg-[#0b1326] overflow-hidden relative">
+    <div className="fixed inset-x-0 bottom-0 top-16 lg:left-72 z-10 flex overflow-hidden bg-[#0b1326]">
 
-      {/* ── Sidebar ───────────────────────────────── */}
+      {/* ── Sidebar (fixed on desktop, drawer on mobile) ── */}
       <div
         className={`
-          fixed inset-y-0 left-0 z-50 w-80 transform transition-transform duration-300 ease-in-out
+          fixed top-16 bottom-0 left-0 z-50 w-80 transform transition-transform duration-300 ease-in-out
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:relative lg:translate-x-0 lg:flex lg:flex-shrink-0
+          lg:static lg:translate-x-0 lg:flex lg:flex-shrink-0 lg:z-auto
         `}
       >
-        <aside className="w-80 h-full border-r border-white/10 bg-[rgba(23,31,51,0.72)] backdrop-blur-xl flex flex-col min-h-0">
+        <aside className="w-80 h-full border-r border-white/10 bg-[rgba(23,31,51,0.72)] backdrop-blur-xl flex flex-col min-h-0 overflow-hidden">
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden absolute top-4 right-4 text-[#cbc3d7] hover:text-white transition-colors p-2"
@@ -349,7 +348,7 @@ export default function ChatPage() {
             <X size={18} />
           </button>
 
-          <div className="p-4 sm:p-6 border-b border-white/10">
+          <div className="flex-shrink-0 p-4 sm:p-6 border-b border-white/10">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-[#cbc3d7] mb-3 sm:mb-4">
               Mentioned Agents
             </h2>
@@ -409,13 +408,13 @@ export default function ChatPage() {
 
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-x-0 top-16 bottom-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* ── Main chat window ──────────────────────── */}
-      <main className="flex-1 flex flex-col relative bg-[#0b1326] min-w-0 min-h-0">
+      {/* ── Main chat window (header + scrollable messages + fixed input) ── */}
+      <main className="flex-1 flex flex-col relative bg-[#0b1326] min-w-0 min-h-0 overflow-hidden">
 
         <header className="h-14 sm:h-16 flex-shrink-0 flex items-center justify-between px-3 sm:px-6 border-b border-white/10 bg-[#0b1326]/80 backdrop-blur-xl z-20">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -490,69 +489,46 @@ export default function ChatPage() {
           {isSending && <TypingIndicator />}
         </div>
 
-        {/* ── Input area ──────────────────────────── */}
-        <div className="flex-shrink-0 p-3 sm:p-6 border-t border-white/10 bg-[#0b1326]/95 backdrop-blur-2xl z-30 shadow-[0_-10px_30px_rgba(0,0,0,0.3)]">
-          <div className="max-w-4xl mx-auto relative px-2 sm:px-4">
-            <div className="absolute -top-10 sm:-top-12 left-2 sm:left-4 flex flex-wrap gap-1.5 sm:gap-2">
-              <div className="px-2 sm:px-3 py-0.5 sm:py-1 bg-[#2d3449] border border-white/20 rounded-full text-[8px] sm:text-[10px] text-[#cbc3d7] flex items-center gap-1 sm:gap-2">
-                <Search className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Search Agents
-              </div>
-              <div className="px-2 sm:px-3 py-0.5 sm:py-1 bg-violet-500/10 border border-violet-400/20 rounded-full text-[8px] sm:text-[10px] text-violet-300 flex items-center gap-1 sm:gap-2">
-                <Zap className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                {selectedBusinessId ? 'RAG: ON' : 'Select Business'}
-              </div>
+        {/* ── Compact input area ──────────────────── */}
+        <div className="flex-shrink-0 px-3 py-2 sm:px-4 sm:py-2.5 border-t border-white/10 bg-[#0b1326]/95 backdrop-blur-xl z-30">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center gap-2 bg-[rgba(23,31,51,0.72)] border border-white/10 rounded-xl px-3 py-1.5 focus-within:border-violet-400/40 transition-colors">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onInput={handleInput}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  !selectedBusinessId
+                    ? 'Select a business to chat…'
+                    : isHistoryLoading
+                      ? 'Loading…'
+                      : 'Ask about your documents…'
+                }
+                disabled={!selectedBusinessId || isSending || isHistoryLoading}
+                rows={1}
+                className="flex-1 bg-transparent border-none focus:outline-none text-[#dae2fd] placeholder:text-[#958ea0] text-sm py-1.5 resize-none min-h-[32px] max-h-[120px] leading-snug disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || !selectedBusinessId || isSending || isHistoryLoading}
+                className="w-8 h-8 flex items-center justify-center rounded-lg bg-gradient-to-r from-violet-300 to-cyan-400 text-[#340080] hover:opacity-90 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                aria-label="Send message"
+              >
+                {isSending
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Send className="w-3.5 h-3.5" />}
+              </button>
             </div>
-
-            <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-2 sm:p-3 rounded-2xl sm:rounded-3xl focus-within:border-violet-400/50 transition-all">
-              <div className="flex items-end gap-2 sm:gap-3">
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onInput={handleInput}
-                  onKeyDown={handleKeyDown}
-                  placeholder={
-                    !selectedBusinessId
-                      ? 'Select a business above to start chatting…'
-                      : isHistoryLoading
-                        ? 'Loading history…'
-                        : 'Ask about your business documents…'
-                  }
-                  disabled={!selectedBusinessId || isSending || isHistoryLoading}
-                  rows={1}
-                  className="flex-1 bg-transparent border-none focus:outline-none text-[#dae2fd] placeholder:text-[#958ea0] text-sm sm:text-base py-2 sm:py-3 resize-none min-h-[36px] sm:min-h-[48px] disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ maxHeight: '200px' }}
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || !selectedBusinessId || isSending || isHistoryLoading}
-                  className="w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center rounded-xl bg-gradient-to-r from-violet-300 via-violet-400 to-cyan-400 text-[#340080] hover:scale-[1.05] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-                  aria-label="Send message"
-                >
-                  {isSending
-                    ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
-                    : <Send className="w-4 h-4 sm:w-5 sm:h-5" />}
-                </button>
+            <div className="mt-1.5 flex items-center justify-between px-1">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-1.5 h-1.5 rounded-full ${selectedBusinessId ? 'bg-cyan-400 animate-pulse' : 'bg-slate-600'}`} />
+                <span className="text-[10px] text-[#958ea0]">
+                  {selectedBusinessId ? 'RAG active' : 'No business selected'}
+                </span>
               </div>
-            </div>
-
-            <div className="mt-2 sm:mt-4 flex flex-wrap items-center justify-between gap-2 px-2">
-              <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                <div className="flex items-center gap-2">
-                  <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shadow-lg ${selectedBusinessId ? 'bg-cyan-400 animate-pulse shadow-cyan-400/50' : 'bg-slate-600'}`} />
-                  <span className="text-[8px] sm:text-[10px] font-semibold uppercase tracking-wider text-[#cbc3d7]">
-                    {selectedBusinessId ? 'Live Context Active' : 'No Context'}
-                  </span>
-                </div>
-                <div className="h-3 w-[1px] bg-white/10 hidden sm:block" />
-                <div className="flex items-center gap-2">
-                  <Shield className="w-3 h-3 sm:w-4 sm:h-4 text-[#cbc3d7]" />
-                  <span className="text-[8px] sm:text-[10px] font-semibold uppercase tracking-wider text-[#cbc3d7] hidden sm:inline">Secured</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-[#cbc3d7]">
-                <span className="text-[8px] sm:text-[10px] font-semibold uppercase tracking-wider">⌘K</span>
-              </div>
+              <span className="text-[10px] text-[#958ea0] hidden sm:inline">Enter to send · Shift+Enter for new line</span>
             </div>
           </div>
         </div>

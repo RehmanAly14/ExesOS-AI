@@ -21,7 +21,6 @@ const menu = [
   { name: "Workspace",         icon: Building2,        path: "/workspace",  group: "main" },
   { name: "Business",          icon: Briefcase,        path: "/business",   group: "main" },
   { name: "AI Chat",           icon: MessageSquare,    path: "/chat",       group: "main" },
-  { name: "Projects",          icon: FolderKanban,     path: "/projects",   group: "insight" },
   { name: "Executive Reports", icon: FileText,         path: "/reports",    group: "insight" },
   { name: "Analytics",         icon: BarChart3,        path: "/analytics",  group: "insight" },
   { name: "Settings",          icon: Settings,         path: "/settings",   group: "system" },
@@ -62,7 +61,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
       {/* ── Header ───────────────────────────────────── */}
       <div className="relative flex items-center justify-between px-5 pt-6 pb-5 border-b border-white/[0.06]">
-        <Link to="/dashboard" className="flex items-center gap-3 group" onClick={onClose}>
+        <Link to="/" className="flex items-center gap-3 group" onClick={onClose}>
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-violet-700 flex items-center justify-center shadow-lg shadow-violet-500/30 group-hover:shadow-violet-500/50 transition-shadow">
             <Zap className="w-4.5 h-4.5 text-white" size={18} />
           </div>
@@ -142,20 +141,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* ── Deploy Agent CTA ─────────────────────────── */}
-      <div className="px-3 py-3 border-t border-white/[0.06]">
-        <button className="
-          w-full flex items-center justify-center gap-2
-          rounded-xl py-2.5 text-sm font-semibold
-          bg-gradient-to-r from-violet-500 to-violet-700
-          text-white shadow-lg shadow-violet-500/20
-          hover:shadow-violet-500/40 hover:from-violet-400 hover:to-violet-600
-          active:scale-[0.98] transition-all duration-200
-        ">
-          <Zap size={14} className="fill-current" />
-          Deploy Agent
-        </button>
-      </div>
+     
 
       {/* ── User Profile ─────────────────────────────── */}
       <div className="px-3 pb-4">

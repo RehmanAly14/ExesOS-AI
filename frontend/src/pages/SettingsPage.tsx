@@ -1,427 +1,439 @@
-import { 
-  User, 
-  Shield, 
-  Bell, 
-  Palette, 
-  Globe, 
-  Key, 
-  Database,
-  Users,
-  Mail,
-  Smartphone,
-  Fingerprint,
-  Moon,
-  Sun,
-  Monitor,
-  CheckCircle2,
-  AlertCircle,
-  ChevronRight,
-  Sparkles,
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  User,
+  Building2,
+  Briefcase,
+  Server,
   LogOut,
-  Trash2,
-  HelpCircle,
-  FileText,
-  Settings as SettingsIcon,
-  Sliders,
-  Zap,
-  Lock,
-  Eye,
-  EyeOff
-} from "lucide-react";
-import { useState } from "react";
+  Palette,
+  Bell,
+  Bot,
+  Users,
+  CreditCard,
+  Key,
+  Plug,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useWorkspaces } from '../hooks/useWorkspaces';
+import { getWorkspaceBusinesses, type Business } from '../services/businessService';
+import { getWorkspaces } from '../services/workspaceService';
+import Badge from '../components/ui/Badge';
+import StatCard from '../components/dashboard/StatCard';
+import EmptyState from '../components/dashboard/EmptyState';
+import { RefreshButton } from '../components/dashboard/DashboardHelpers';
 
-export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("general");
-  const [isTwoFactorEnabled, setIsTwoFactorEnabled] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
+// ── Helpers ────────────────────────────────────────
 
-  const tabs = [
-    { id: "general", label: "General", icon: SettingsIcon },
-    { id: "profile", label: "Profile", icon: User },
-    { id: "security", label: "Security", icon: Shield },
-    { id: "notifications", label: "Notifications", icon: Bell },
-    { id: "appearance", label: "Appearance", icon: Palette },
-  ];
+function displayValue(value: string | null | undefined, fallback = 'Not Available'): string {
+  return value?.trim() ? value : fallback;
+}
+
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Not Available';
+  return new Date(dateStr).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function userInitials(name: string | undefined): string {
+  if (!name) return '?';
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+// ── Sub-components ─────────────────────────────────
+
+function SectionCard({
+  title,
+  description,
+  icon,
+  children,
+}: {
+  title: string;
+  description?: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8">
+      <div className="flex items-start gap-3 mb-5 sm:mb-6">
+        <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-300 shrink-0">{icon}</div>
+        <div>
+          <h2 className="text-base sm:text-lg font-semibold text-[#dae2fd]">{title}</h2>
+          {description && <p className="text-xs sm:text-sm text-[#cbc3d7] mt-0.5">{description}</p>}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  const unavailable = value === 'Not Available';
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 py-3 border-b border-white/5 last:border-0">
+      <span className="text-xs sm:text-sm text-[#cbc3d7]">{label}</span>
+      <span
+        className={`text-sm font-medium truncate max-w-full sm:max-w-[60%] sm:text-right ${
+          unavailable ? 'text-[#958ea0] italic' : 'text-[#dae2fd]'
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function StatusRow({ label, status }: { label: string; status: 'connected' | 'active' | 'operational' | 'checking' | 'error' }) {
+  const config = {
+    connected: { dot: 'bg-emerald-400', text: 'Connected', variant: 'success' as const },
+    active: { dot: 'bg-emerald-400', text: 'Active', variant: 'success' as const },
+    operational: { dot: 'bg-emerald-400', text: 'Operational', variant: 'success' as const },
+    checking: { dot: 'bg-amber-400 animate-pulse', text: 'Checking…', variant: 'warning' as const },
+    error: { dot: 'bg-rose-400', text: 'Unavailable', variant: 'error' as const },
+  }[status];
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6 lg:p-8 pb-20">
+    <div className="flex items-center justify-between py-3 border-b border-white/5 last:border-0">
+      <span className="text-sm text-[#cbc3d7]">{label}</span>
+      <div className="flex items-center gap-2">
+        <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+        <Badge variant={config.variant} size="sm">
+          {config.text}
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
+const upcomingFeatures = [
+  { label: 'Theme Preferences', icon: Palette, description: 'Light, dark, and custom themes' },
+  { label: 'Notification Settings', icon: Bell, description: 'Email and in-app alerts' },
+  { label: 'Agent Preferences', icon: Bot, description: 'Configure AI agent behavior' },
+  { label: 'Team Management', icon: Users, description: 'Invite and manage team members' },
+  { label: 'Billing & Subscription', icon: CreditCard, description: 'Plans and payment methods' },
+  { label: 'API Keys', icon: Key, description: 'Manage programmatic access' },
+  { label: 'Integrations', icon: Plug, description: 'Connect third-party tools' },
+];
+
+// ── Main Page ──────────────────────────────────────
+
+export default function SettingsPage() {
+  const navigate = useNavigate();
+  const { user, isAuthenticated, isInitialized, logout } = useAuth();
+  const { workspaces, isLoading: workspacesLoading, refresh: refreshWorkspaces } = useWorkspaces();
+
+  const [allBusinesses, setAllBusinesses] = useState<Business[]>([]);
+  const [businessesLoading, setBusinessesLoading] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [apiStatus, setApiStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+
+  const loadBusinesses = useCallback(async () => {
+    if (workspaces.length === 0) {
+      setAllBusinesses([]);
+      return;
+    }
+    setBusinessesLoading(true);
+    try {
+      const results = await Promise.allSettled(
+        workspaces.map((ws) => getWorkspaceBusinesses(ws.id))
+      );
+      const businesses = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+      setAllBusinesses(businesses);
+    } finally {
+      setBusinessesLoading(false);
+    }
+  }, [workspaces]);
+
+  useEffect(() => {
+    loadBusinesses();
+  }, [loadBusinesses]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setApiStatus('checking');
+    getWorkspaces()
+      .then(() => {
+        if (!cancelled) setApiStatus('connected');
+      })
+      .catch(() => {
+        if (!cancelled) setApiStatus('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRefresh = () => {
+    refreshWorkspaces();
+    loadBusinesses();
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      navigate('/auth');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  const currentWorkspace = workspaces.length > 0
+    ? [...workspaces].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )[0]
+    : null;
+
+  const activeBusiness = allBusinesses.length > 0
+    ? [...allBusinesses].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )[0]
+    : null;
+
+  const accountLoading = !isInitialized;
+  const overviewLoading = workspacesLoading || businessesLoading;
+
+  return (
+    <div className="max-w-5xl mx-auto pb-20">
       {/* Header */}
-      <div className="mb-8 md:mb-10">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="h-8 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
-          <p className="text-xs md:text-sm font-semibold uppercase tracking-widest text-violet-300">
-            Settings
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-8 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
+            <p className="text-xs font-semibold uppercase tracking-widest text-violet-300">
+              Settings
+            </p>
+          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#dae2fd] tracking-tight">
+            Account & Workspace
+          </h1>
+          <p className="text-[#cbc3d7] mt-2 text-sm">
+            Manage your account, workspace overview, and platform preferences.
           </p>
         </div>
-
-        <h1 className="text-3xl md:text-4xl font-bold text-[#dae2fd] tracking-tight">
-          Workspace Settings
-        </h1>
-        <p className="text-[#cbc3d7] mt-2 text-sm md:text-base">
-          Manage your workspace preferences and configurations.
-        </p>
+        <RefreshButton onClick={handleRefresh} isRefreshing={overviewLoading} />
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Sidebar Tabs */}
-        <div className="lg:w-64 flex-shrink-0">
-          <div className="sticky top-6 space-y-1">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all duration-200 ${
-                    isActive
-                      ? "bg-violet-500/20 text-violet-300 ring-1 ring-violet-400/30"
-                      : "text-[#cbc3d7] hover:bg-white/5 hover:text-[#dae2fd]"
-                  }`}
-                >
-                  <Icon size={18} />
-                  <span className="text-sm font-medium">{tab.label}</span>
-                  {isActive && (
-                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-400" />
+      <div className="space-y-6">
+        {/* ── Section 1: Account ─────────────────── */}
+        <SectionCard
+          title="Account"
+          description="Your authenticated profile information"
+          icon={<User size={18} />}
+        >
+          {accountLoading ? (
+            <div className="flex items-center gap-3 py-6 text-[#cbc3d7]">
+              <Loader2 className="w-5 h-5 animate-spin text-violet-300" />
+              <span className="text-sm">Loading account…</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-4 mb-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="h-14 w-14 rounded-full bg-gradient-to-br from-violet-500/30 to-cyan-500/30 flex items-center justify-center border border-violet-400/30 shrink-0">
+                  <span className="text-lg font-bold text-[#dae2fd]">{userInitials(user?.name)}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-[#dae2fd] truncate">
+                    {displayValue(user?.name)}
+                  </p>
+                  <p className="text-sm text-[#cbc3d7] truncate">{displayValue(user?.email)}</p>
+                  {isAuthenticated && (
+                    <Badge variant="success" size="sm" className="mt-1.5">
+                      Authenticated
+                    </Badge>
                   )}
-                </button>
-              );
-            })}
+                </div>
+              </div>
+              <div className="rounded-xl bg-[#131b2e]/50 px-4">
+                <InfoRow label="Full Name" value={displayValue(user?.name)} />
+                <InfoRow label="Email Address" value={displayValue(user?.email)} />
+                <InfoRow label="User ID" value={displayValue(user?.id)} />
+                <InfoRow label="Account Created" value={formatDate(user?.createdAt)} />
+              </div>
+            </>
+          )}
+        </SectionCard>
+
+        {/* ── Sections 2 & 3: Workspace + Business ─ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+          <SectionCard
+            title="Workspace Overview"
+            description="Your workspace configuration"
+            icon={<Building2 size={18} />}
+          >
+            {overviewLoading ? (
+              <div className="space-y-3 animate-pulse">
+                <div className="h-4 w-24 bg-[#2d3449] rounded" />
+                <div className="h-8 w-16 bg-[#2d3449] rounded" />
+                <div className="h-12 bg-[#2d3449]/60 rounded-xl" />
+              </div>
+            ) : workspaces.length === 0 ? (
+              <EmptyState
+                icon={<Building2 className="w-5 h-5" />}
+                title="No workspaces yet"
+                description="Create a workspace to organize your businesses and documents."
+              />
+            ) : (
+              <>
+                <StatCard
+                  label="Total Workspaces"
+                  value={workspaces.length}
+                  accent="violet"
+                  className="mb-4 !p-4"
+                />
+                <div className="rounded-xl bg-[#131b2e]/50 px-4">
+                  <InfoRow
+                    label="Current Workspace"
+                    value={displayValue(currentWorkspace?.name)}
+                  />
+                  <InfoRow
+                    label="Description"
+                    value={displayValue(currentWorkspace?.description ?? undefined)}
+                  />
+                </div>
+              </>
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Business Overview"
+            description="Businesses across your workspaces"
+            icon={<Briefcase size={18} />}
+          >
+            {overviewLoading ? (
+              <div className="space-y-3 animate-pulse">
+                <div className="h-4 w-24 bg-[#2d3449] rounded" />
+                <div className="h-8 w-16 bg-[#2d3449] rounded" />
+                <div className="h-12 bg-[#2d3449]/60 rounded-xl" />
+              </div>
+            ) : allBusinesses.length === 0 ? (
+              <EmptyState
+                icon={<Briefcase className="w-5 h-5" />}
+                title="No businesses yet"
+                description="Add a business inside a workspace to start uploading documents."
+              />
+            ) : (
+              <>
+                <StatCard
+                  label="Total Businesses"
+                  value={allBusinesses.length}
+                  accent="cyan"
+                  className="mb-4 !p-4"
+                />
+                <div className="rounded-xl bg-[#131b2e]/50 px-4">
+                  <InfoRow
+                    label="Active Business"
+                    value={displayValue(activeBusiness?.name)}
+                  />
+                  <InfoRow
+                    label="Industry"
+                    value={displayValue(activeBusiness?.industry)}
+                  />
+                </div>
+              </>
+            )}
+          </SectionCard>
+        </div>
+
+        {/* ── Section 4: System Status ───────────── */}
+        <SectionCard
+          title="System Status"
+          description="Platform health and connectivity"
+          icon={<Server size={18} />}
+        >
+          <div className="mb-4 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-300" />
+            <span className="text-sm font-medium text-emerald-300">System Healthy</span>
           </div>
-        </div>
+          <div className="rounded-xl bg-[#131b2e]/50 px-4">
+            <StatusRow
+              label="Backend API"
+              status={apiStatus === 'checking' ? 'checking' : apiStatus === 'connected' ? 'connected' : 'error'}
+            />
+            <StatusRow
+              label="Authentication"
+              status={isAuthenticated ? 'active' : accountLoading ? 'checking' : 'error'}
+            />
+            <StatusRow
+              label="Database"
+              status={apiStatus === 'connected' ? 'operational' : apiStatus === 'checking' ? 'checking' : 'error'}
+            />
+          </div>
+        </SectionCard>
 
-        {/* Main Content */}
-        <div className="flex-1 min-w-0">
-          {/* General Settings */}
-          {activeTab === "general" && (
-            <div className="space-y-6">
-              {/* Workspace Info */}
-              <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-6 md:p-8 rounded-3xl">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#dae2fd] flex items-center gap-2">
-                      <Database size={16} className="text-violet-300" />
-                      Workspace Information
-                    </h3>
-                    <p className="text-xs text-[#cbc3d7] mt-0.5">Basic information about your workspace</p>
-                  </div>
+        {/* ── Section 5: Upcoming Features ───────── */}
+        <SectionCard
+          title="Upcoming Features"
+          description="Planned settings and customization options"
+          icon={<Sparkles size={18} />}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {upcomingFeatures.map((feature) => (
+              <div
+                key={feature.label}
+                className="flex items-start gap-3 p-4 rounded-xl border border-white/5 bg-white/[0.02] opacity-60 cursor-not-allowed select-none"
+                aria-disabled="true"
+              >
+                <div className="p-2 rounded-lg bg-[#2d3449] text-[#958ea0] shrink-0">
+                  <feature.icon size={16} />
                 </div>
-                <div className="space-y-4 mt-6">
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-[#cbc3d7]">Workspace Name</label>
-                    <input
-                      type="text"
-                      defaultValue="Acme Corporation"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#dae2fd] placeholder-[#958ea0] outline-none transition-all duration-300 focus:border-violet-400/30 focus:bg-white/10 focus:ring-1 focus:ring-violet-400/30"
-                    />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-[#cbc3d7]">{feature.label}</p>
+                    <Badge variant="default" size="sm">
+                      Coming Soon
+                    </Badge>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-[#cbc3d7]">Workspace Slug</label>
-                    <input
-                      type="text"
-                      defaultValue="acme-corp"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#dae2fd] placeholder-[#958ea0] outline-none transition-all duration-300 focus:border-violet-400/30 focus:bg-white/10 focus:ring-1 focus:ring-violet-400/30"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-[#cbc3d7]">Plan</label>
-                    <select className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#dae2fd] outline-none transition-all duration-300 focus:border-violet-400/30 focus:bg-white/10 focus:ring-1 focus:ring-violet-400/30">
-                      <option value="free" className="bg-[#171f33]">Free</option>
-                      <option value="pro" className="bg-[#171f33]">Pro</option>
-                      <option value="business" className="bg-[#171f33]">Business</option>
-                      <option value="enterprise" className="bg-[#171f33]">Enterprise</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="mt-6 flex justify-end">
-                  <button className="inline-flex items-center justify-center gap-2 font-semibold text-[#340080] bg-gradient-to-r from-violet-300 via-violet-400 to-cyan-400 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(208,188,255,0.35)] active:scale-[0.98] px-6 py-3 text-sm rounded-xl">
-                    Save Changes
-                  </button>
+                  <p className="text-xs text-[#958ea0] mt-0.5">{feature.description}</p>
                 </div>
               </div>
+            ))}
+          </div>
+        </SectionCard>
 
-              {/* Danger Zone */}
-              <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-rose-500/20 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-6 md:p-8 rounded-3xl">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#dae2fd] flex items-center gap-2">
-                      <AlertCircle size={16} className="text-rose-400" />
-                      Danger Zone
-                    </h3>
-                    <p className="text-xs text-[#cbc3d7] mt-0.5">Irreversible actions</p>
-                  </div>
-                </div>
-                <div className="space-y-4 mt-6">
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-rose-500/5 border border-rose-500/10">
-                    <div>
-                      <p className="text-sm font-medium text-[#dae2fd]">Delete Workspace</p>
-                      <p className="text-xs text-[#cbc3d7]">This action cannot be undone</p>
-                    </div>
-                    <button className="px-4 py-2 rounded-xl bg-rose-500/20 text-rose-400 text-sm font-medium hover:bg-rose-500/30 transition">
-                      Delete
-                    </button>
-                  </div>
-                </div>
+        {/* ── Section 6: Logout ──────────────────── */}
+        <section className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-300 shrink-0">
+                <LogOut size={18} />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-semibold text-[#dae2fd]">Sign Out</h2>
+                <p className="text-xs sm:text-sm text-[#cbc3d7] mt-0.5">
+                  End your current session and return to the login page.
+                </p>
               </div>
             </div>
-          )}
-
-          {/* Profile Settings */}
-          {activeTab === "profile" && (
-            <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-6 md:p-8 rounded-3xl">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-[#dae2fd] flex items-center gap-2">
-                    <User size={16} className="text-violet-300" />
-                    Profile Settings
-                  </h3>
-                  <p className="text-xs text-[#cbc3d7] mt-0.5">Manage your personal information</p>
-                </div>
-              </div>
-              <div className="space-y-4 mt-6">
-                <div className="flex items-center gap-6 p-4 rounded-xl bg-white/5 border border-white/10">
-                  <div className="h-20 w-20 rounded-full bg-gradient-to-br from-violet-500/30 to-cyan-500/30 flex items-center justify-center border-2 border-violet-400/30">
-                    <span className="text-2xl font-bold text-[#dae2fd]">JD</span>
-                  </div>
-                  <div>
-                    <button className="text-sm text-violet-300 hover:text-violet-200 transition">
-                      Change Avatar
-                    </button>
-                    <p className="text-xs text-[#cbc3d7] mt-1">PNG, JPG up to 5MB</p>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-[#cbc3d7]">Full Name</label>
-                  <input
-                    type="text"
-                    defaultValue="John Doe"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#dae2fd] placeholder-[#958ea0] outline-none transition-all duration-300 focus:border-violet-400/30 focus:bg-white/10 focus:ring-1 focus:ring-violet-400/30"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-[#cbc3d7]">Email</label>
-                  <input
-                    type="email"
-                    defaultValue="john@acme.com"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#dae2fd] placeholder-[#958ea0] outline-none transition-all duration-300 focus:border-violet-400/30 focus:bg-white/10 focus:ring-1 focus:ring-violet-400/30"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-[#cbc3d7]">Role</label>
-                  <input
-                    type="text"
-                    defaultValue="Admin"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#dae2fd] placeholder-[#958ea0] outline-none transition-all duration-300 focus:border-violet-400/30 focus:bg-white/10 focus:ring-1 focus:ring-violet-400/30"
-                  />
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end">
-                <button className="inline-flex items-center justify-center gap-2 font-semibold text-[#340080] bg-gradient-to-r from-violet-300 via-violet-400 to-cyan-400 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(208,188,255,0.35)] active:scale-[0.98] px-6 py-3 text-sm rounded-xl">
-                  Update Profile
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Security Settings */}
-          {activeTab === "security" && (
-            <div className="space-y-6">
-              <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-6 md:p-8 rounded-3xl">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#dae2fd] flex items-center gap-2">
-                      <Shield size={16} className="text-violet-300" />
-                      Security
-                    </h3>
-                    <p className="text-xs text-[#cbc3d7] mt-0.5">Protect your account</p>
-                  </div>
-                </div>
-                <div className="space-y-4 mt-6">
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-[#cbc3d7]">Current Password</label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#dae2fd] placeholder-[#958ea0] outline-none transition-all duration-300 focus:border-violet-400/30 focus:bg-white/10 focus:ring-1 focus:ring-violet-400/30 pr-12"
-                      />
-                      <button
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#cbc3d7] hover:text-[#dae2fd] transition"
-                      >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-[#cbc3d7]">New Password</label>
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#dae2fd] placeholder-[#958ea0] outline-none transition-all duration-300 focus:border-violet-400/30 focus:bg-white/10 focus:ring-1 focus:ring-violet-400/30"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-[#cbc3d7]">Confirm New Password</label>
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-[#dae2fd] placeholder-[#958ea0] outline-none transition-all duration-300 focus:border-violet-400/30 focus:bg-white/10 focus:ring-1 focus:ring-violet-400/30"
-                    />
-                  </div>
-                </div>
-                <div className="mt-6 flex justify-end">
-                  <button className="inline-flex items-center justify-center gap-2 font-semibold text-[#340080] bg-gradient-to-r from-violet-300 via-violet-400 to-cyan-400 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(208,188,255,0.35)] active:scale-[0.98] px-6 py-3 text-sm rounded-xl">
-                    Change Password
-                  </button>
-                </div>
-              </div>
-
-              {/* Two-Factor Authentication */}
-              <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-6 md:p-8 rounded-3xl">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#dae2fd] flex items-center gap-2">
-                      <Fingerprint size={16} className="text-violet-300" />
-                      Two-Factor Authentication
-                    </h3>
-                    <p className="text-xs text-[#cbc3d7] mt-0.5">Add an extra layer of security</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 mt-6">
-                  <div>
-                    <p className="text-sm font-medium text-[#dae2fd]">2FA Authentication</p>
-                    <p className="text-xs text-[#cbc3d7]">
-                      {isTwoFactorEnabled ? "Enabled • Your account is protected" : "Disabled • Your account is not protected"}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setIsTwoFactorEnabled(!isTwoFactorEnabled)}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-300 ease-in-out ${
-                      isTwoFactorEnabled ? "bg-gradient-to-r from-violet-500 to-cyan-500" : "bg-white/10"
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
-                        isTwoFactorEnabled ? "translate-x-5" : "translate-x-0.5"
-                      } mt-0.5`}
-                    />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Notifications */}
-          {activeTab === "notifications" && (
-            <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-6 md:p-8 rounded-3xl">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-[#dae2fd] flex items-center gap-2">
-                    <Bell size={16} className="text-violet-300" />
-                    Notifications
-                  </h3>
-                  <p className="text-xs text-[#cbc3d7] mt-0.5">Manage your notification preferences</p>
-                </div>
-              </div>
-              <div className="space-y-4 mt-6">
-                {[
-                  { label: "Email Notifications", sub: "Receive updates via email", enabled: true },
-                  { label: "Push Notifications", sub: "Receive updates in-browser", enabled: true },
-                  { label: "Weekly Digest", sub: "Weekly summary of activity", enabled: false },
-                  { label: "Agent Alerts", sub: "AI agent status updates", enabled: true },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
-                    <div>
-                      <p className="text-sm font-medium text-[#dae2fd]">{item.label}</p>
-                      <p className="text-xs text-[#cbc3d7]">{item.sub}</p>
-                    </div>
-                    <button
-                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-300 ease-in-out ${
-                        item.enabled ? "bg-gradient-to-r from-violet-500 to-cyan-500" : "bg-white/10"
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
-                          item.enabled ? "translate-x-5" : "translate-x-0.5"
-                        } mt-0.5`}
-                      />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Appearance */}
-          {/* Appearance - FULLY RESPONSIVE */}
-          {activeTab === "appearance" && (
-            <div className="bg-[rgba(23,31,51,0.72)] backdrop-blur-xl border border-white/10 shadow-[0_10px_40px_rgba(0,0,0,0.25)] p-6 md:p-8 rounded-3xl">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-[#dae2fd] flex items-center gap-2">
-                    <Palette size={16} className="text-violet-300" />
-                    Appearance
-                  </h3>
-                  <p className="text-xs text-[#cbc3d7] mt-0.5">Customize your workspace appearance</p>
-                </div>
-              </div>
-              <div className="space-y-6 mt-6">
-                {/* Theme */}
-                <div>
-                  <p className="text-sm font-medium text-[#dae2fd] mb-3">Theme</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {[
-                      { id: "dark", label: "Dark", icon: Moon, selected: isDarkMode },
-                      { id: "light", label: "Light", icon: Sun, selected: false },
-                      { id: "system", label: "System", icon: Monitor, selected: false },
-                    ].map((theme) => (
-                      <button
-                        key={theme.id}
-                        onClick={() => setIsDarkMode(theme.id === "dark")}
-                        className={`flex items-center justify-center sm:justify-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl border transition-all ${
-                          theme.selected
-                            ? "border-violet-400/50 bg-violet-500/10"
-                            : "border-white/10 hover:border-white/20"
-                        }`}
-                      >
-                        <theme.icon size={18} className={theme.selected ? "text-violet-300" : "text-[#cbc3d7]"} />
-                        <span className={theme.selected ? "text-[#dae2fd]" : "text-[#cbc3d7]"}>
-                          {theme.label}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Accent Color */}
-                <div>
-                  <p className="text-sm font-medium text-[#dae2fd] mb-3">Accent Color</p>
-                  <div className="flex flex-wrap gap-3">
-                    {[
-                      { color: "violet", class: "bg-violet-500" },
-                      { color: "blue", class: "bg-blue-500" },
-                      { color: "cyan", class: "bg-cyan-500" },
-                      { color: "emerald", class: "bg-emerald-500" },
-                      { color: "rose", class: "bg-rose-500" },
-                      { color: "amber", class: "bg-amber-500" },
-                    ].map((color) => (
-                      <button
-                        key={color.color}
-                        className={`w-8 h-8 rounded-full ${color.class} ring-2 ring-offset-2 ring-offset-[#0b1326] transition ${
-                          color.color === "violet" ? "ring-violet-400" : "ring-transparent hover:ring-white/30"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm font-semibold hover:bg-rose-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              {isLoggingOut ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Signing out…
+                </>
+              ) : (
+                <>
+                  <LogOut size={16} />
+                  Log Out
+                </>
+              )}
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );

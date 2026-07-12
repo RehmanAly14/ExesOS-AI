@@ -40,6 +40,8 @@ export interface ChatResponse {
   answer: string;
   businessId: string;
   message: string;
+  agent?: string;
+  reportId?: string;
   retrieval: ChatRetrievalMetadata;
   messages?: ApiChatMessage[];
 }
