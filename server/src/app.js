@@ -13,6 +13,7 @@ const workspaceRoutes = require("./modules/workspace/workspaceRoutes");
 const businessRoutes = require("./modules/business/businessRoutes");
 const documentRoutes = require("./modules/document/documentRoutes");
 const chatRoutes = require("./modules/chat/chatRoutes");
+const reportRoutes = require("./modules/report/reportRoutes");
 
 const app = express();
 
@@ -38,7 +39,7 @@ if (process.env.NODE_ENV === "development") {
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "BusinessOS AI API is running.",
+    message: "ExecOS AI API is running.",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
   });
@@ -51,6 +52,7 @@ app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/businesses", businessRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/reports", reportRoutes);
  
 app.use((req, res) => {
   res.status(404).json({
@@ -61,25 +63,35 @@ app.use((req, res) => {
 
 
 app.use((err, req, res, next) => {
-  // Log the full error internally
   console.error(`[ERROR] ${err.message}`, {
-    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    details: err.details,
+    stack: err.stack,
     path: req.path,
     method: req.method,
   });
 
-  // Use a custom statusCode if the service set one, otherwise default to 500
   const statusCode = err.statusCode || 500;
+  const isProduction = process.env.NODE_ENV === "production";
 
-  res.status(statusCode).json({
+  const errorMessage =
+    err.publicError ||
+    (statusCode === 500 && isProduction
+      ? "An internal server error occurred. Please try again later."
+      : err.message || "An unexpected error occurred.");
+
+  const response = {
     success: false,
-    message:
-      statusCode === 500 && process.env.NODE_ENV === "production"
-        ? "An internal server error occurred. Please try again later."
-        : err.message || "An unexpected error occurred.",
-    // Include stack trace only in development for easier debugging
-    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
-  });
+    message: errorMessage,
+    error: errorMessage,
+  };
+
+  if (err.details) {
+    response.details = err.details;
+  } else if (!isProduction && err.message) {
+    response.details = err.message;
+  }
+
+  res.status(statusCode).json(response);
 });
 
 module.exports = app;

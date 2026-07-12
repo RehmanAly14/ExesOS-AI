@@ -1,133 +1,189 @@
-const axios = require("axios");
+const prisma = require("../../../config/prisma");
 const { RecursiveCharacterChunker } = require("../chunking/RecursiveCharacterChunker");
 const { FireworksEmbeddingProvider } = require("../providers/FireworksEmbeddingProvider");
 const { PostgreSQLVectorStorage } = require("../storage/PostgreSQLVectorStorage");
-const { randomUUID } = require("crypto");
+
+const MIME_TYPES = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  txt: "text/plain",
+};
+
+function buildChunkMetadata(doc, businessId) {
+  const workspaceId = doc.business?.workspaceId;
+  if (!workspaceId) {
+    throw new Error(`Missing workspaceId for document ${doc.id}`);
+  }
+
+  return {
+    workspaceId,
+    businessId,
+    documentId: doc.id,
+    documentType: doc.fileType || "unknown",
+    mimeType: MIME_TYPES[doc.fileType] || "application/octet-stream",
+    title: doc.filename || "Untitled",
+    metadata: {},
+  };
+}
 
 class EmbeddingPipeline {
   /**
-   * @param {import('../interfaces/IVectorStorage').IVectorStorage} vectorStorage
-   */
-  /**
    * @param {import('../interfaces/IVectorStorage').IVectorStorage} [vectorStorage]
-   * Defaults to PostgreSQLVectorStorage (MVP). Pass a different IVectorStorage
-   * implementation to swap the vector database without changing pipeline logic.
    */
   constructor(vectorStorage) {
     this.chunker = new RecursiveCharacterChunker();
     this.embeddingProvider = new FireworksEmbeddingProvider();
     this.vectorStorage = vectorStorage || new PostgreSQLVectorStorage();
+    this.prisma = prisma;
+  }
 
-    const port = process.env.PORT || 5000;
-    this.apiBaseUrl = process.env.API_BASE_URL || `http://localhost:${port}`;
+  async getDocumentForEmbedding(documentId) {
+    return this.prisma.document.findUnique({
+      where: { id: documentId },
+      include: {
+        business: {
+          select: { workspaceId: true },
+        },
+      },
+    });
+  }
+
+  async updateDocumentEmbeddingStatus(documentId, status) {
+    console.log(`[EmbeddingPipeline] Updating embeddingStatus for document ${documentId} → ${status}`);
+    await this.prisma.document.update({
+      where: { id: documentId },
+      data: { embeddingStatus: status },
+    });
   }
 
   /**
-   * Fetches extracted documents for a business.
-   * @param {string} businessId
-   * @returns {Promise<any[]>}
-   */
-  async getExtractedDocuments(businessId) {
-    try {
-      const response = await axios.get(`${this.apiBaseUrl}/api/documents/business/${businessId}?status=extracted`);
-      return response.data.data || [];
-    } catch (error) {
-      console.error(`Error fetching documents for business ${businessId}:`, error.message);
-      throw new Error(`Could not fetch documents for business ${businessId}`);
-    }
-  }
-
-  /**
-   * Updates the embedding status of a document.
    * @param {string} documentId
-   * @param {"embedded" | "failed"} status
-   * @returns {Promise<void>}
+   * @returns {Promise<{ documentId: string, chunkCount: number, embeddingStatus: "embedded" }>}
    */
-  async updateDocumentStatus(documentId, status) {
+  async processDocument(documentId) {
+    console.log(`[EmbeddingPipeline] Starting embedding for document: ${documentId}`);
+
+    const doc = await this.getDocumentForEmbedding(documentId);
+    if (!doc) {
+      throw new Error(`Document not found: ${documentId}`);
+    }
+
+    if (doc.status !== "extracted") {
+      throw new Error(
+        `Document ${documentId} is not ready for embedding (status: ${doc.status})`
+      );
+    }
+
+    if (!doc.extractedText || !doc.extractedText.trim()) {
+      throw new Error(`Document ${documentId} has no extracted text`);
+    }
+
     try {
-      await axios.patch(`${this.apiBaseUrl}/api/documents/${documentId}/embedding-status`, {
-        embeddingStatus: status
-      });
-    } catch (error) {
-      console.error(`Error updating document status for ${documentId}:`, error.message);
-    }
-  }
-
-  /**
-   * Runs the complete pipeline for a given business ID.
-   * @param {string} businessId
-   * @returns {Promise<void>}
-   */
-  async processBusinessDocuments(businessId) {
-    console.log(`Starting embedding pipeline for business: ${businessId}`);
-    
-    // 1. Document Processor - Fetch documents
-    const documents = await this.getExtractedDocuments(businessId);
-    
-    if (documents.length === 0) {
-      console.log(`No extracted documents found for business: ${businessId}`);
-      return;
-    }
-
-    for (const doc of documents) {
-      if (!doc.extractedText || doc.extractedText.trim() === "") {
-        console.log(`Skipping document ${doc.id} due to empty extracted text.`);
-        continue;
+      const deletedCount = await this.vectorStorage.deleteChunksByDocumentId(documentId);
+      if (deletedCount > 0) {
+        console.log(`[EmbeddingPipeline] Removed ${deletedCount} existing chunk(s) for document: ${documentId}`);
       }
+
+      const baseMetadata = buildChunkMetadata(doc, doc.businessId);
+      const chunksMetadata = this.chunker.chunkDocument(doc.extractedText, baseMetadata);
+
+      if (chunksMetadata.length === 0) {
+        throw new Error(`No chunks generated for document ${documentId}`);
+      }
+
+      console.log(
+        `[EmbeddingPipeline] Created ${chunksMetadata.length} chunk(s) for document: ${documentId}`
+      );
+
+      const chunkContents = chunksMetadata.map((chunk) => chunk.content);
+      const embeddings = await this.embeddingProvider.generateEmbeddingsBatch(chunkContents);
+
+      if (embeddings.length !== chunksMetadata.length) {
+        throw new Error(
+          `Embedding count mismatch for document ${documentId}. Expected ${chunksMetadata.length}, got ${embeddings.length}`
+        );
+      }
+
+      console.log(
+        `[EmbeddingPipeline] Generated ${embeddings.length} embedding(s) for document: ${documentId}`
+      );
+
+      const vectorRecords = chunksMetadata.map((meta, index) => ({
+        id: meta.chunkId,
+        embedding: embeddings[index],
+        metadata: meta,
+      }));
+
+      await this.vectorStorage.upsertVectors(vectorRecords, documentId);
+      await this.updateDocumentEmbeddingStatus(documentId, "embedded");
+
+      console.log(
+        `[EmbeddingPipeline] Successfully embedded document: ${documentId} (${chunksMetadata.length} chunk(s) saved)`
+      );
+
+      return {
+        documentId,
+        chunkCount: chunksMetadata.length,
+        embeddingStatus: "embedded",
+      };
+    } catch (error) {
+      console.error(
+        `[EmbeddingPipeline] Embedding failed for document ${documentId}:`,
+        error.message
+      );
 
       try {
-        console.log(`Processing document: ${doc.id} - ${doc.title || doc.filename}`);
+        await this.updateDocumentEmbeddingStatus(documentId, "failed");
+      } catch (statusError) {
+        console.error(
+          `[EmbeddingPipeline] Failed to set embeddingStatus=failed for document ${documentId}:`,
+          statusError.message
+        );
+      }
 
-        // Base metadata strictly bound to VectorSchema requirements
-        const baseMetadata = {
-          workspaceId: doc.business?.workspaceId || "unknown",
-          businessId: businessId,
-          documentId: doc.id,
-          documentType: doc.fileType || "unknown",
-          mimeType: doc.mimeType || "application/octet-stream",
-          title: doc.title || doc.filename || "Untitled",
-          metadata: {}
-        };
+      throw error;
+    }
+  }
 
-        // 2. Chunking
-        const chunksMetadata = this.chunker.chunkDocument(doc.extractedText, baseMetadata);
+  async processBusinessDocuments(businessId) {
+    console.log(`[EmbeddingPipeline] Starting pipeline for business: ${businessId}`);
 
-        if (chunksMetadata.length === 0) {
-          console.log(`No chunks generated for document ${doc.id}. Skipping.`);
-          continue;
-        }
+    const documents = await this.prisma.document.findMany({
+      where: {
+        businessId,
+        status: "extracted",
+        embeddingStatus: "pending",
+      },
+      select: { id: true },
+    });
 
-        const chunkContents = chunksMetadata.map(c => c.content);
+    if (documents.length === 0) {
+      console.log(
+        `[EmbeddingPipeline] No pending extracted documents found for business: ${businessId}`
+      );
+      return { processed: 0, failed: 0 };
+    }
 
-        // 3. Embedding Generation
-        const embeddings = await this.embeddingProvider.generateEmbeddingsBatch(chunkContents);
+    let processed = 0;
+    let failed = 0;
 
-        if (embeddings.length !== chunksMetadata.length) {
-          throw new Error(`Embedding count mismatch. Expected ${chunksMetadata.length}, got ${embeddings.length}`);
-        }
-
-        // Prepare Vector Records
-        const vectorRecords = chunksMetadata.map((meta, index) => ({
-          id: meta.chunkId,
-          embedding: embeddings[index],
-          metadata: meta
-        }));
-
-        // 4. Vector Storage
-        await this.vectorStorage.upsertVectors(vectorRecords);
-
-        // 5. Document Status
-        await this.updateDocumentStatus(doc.id, "embedded");
-        console.log(`Successfully embedded and stored document: ${doc.id}`);
-
-      } catch (error) {
-        console.error(`Failed to process document ${doc.id}:`, error.message);
+    for (const doc of documents) {
+      try {
+        await this.processDocument(doc.id);
+        processed += 1;
+      } catch (_error) {
+        failed += 1;
       }
     }
-    console.log(`Completed embedding pipeline for business: ${businessId}`);
+
+    console.log(
+      `[EmbeddingPipeline] Completed pipeline for business: ${businessId} (${processed} succeeded, ${failed} failed)`
+    );
+
+    return { processed, failed };
   }
 }
 
 module.exports = {
-  EmbeddingPipeline
+  EmbeddingPipeline,
 };

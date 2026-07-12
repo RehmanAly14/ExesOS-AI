@@ -1,13 +1,27 @@
 const prisma = require("../../config/prisma");
 const { FireworksEmbeddingProvider } = require("../../ai/embeddings/providers/FireworksEmbeddingProvider");
 const { PostgreSQLRetrievalService } = require("../../ai/retrieval/services/PostgreSQLRetrievalService");
-const { FireworksLLMProvider } = require("../../ai/llm/providers/FireworksLLMProvider");
 const agentRouter = require("../../ai/agents/AgentRouter");
+const reportService = require("../report/reportServices");
 
 const embeddingProvider = new FireworksEmbeddingProvider();
 const retrievalService = new PostgreSQLRetrievalService();
 
 const RETRIEVAL_TOP_K = Number.parseInt(process.env.RETRIEVAL_TOP_K || "5", 10);
+
+const EXECUTIVE_REPORT_KEYWORDS = [
+    "executive report",
+    "full report",
+    "comprehensive analysis",
+    "business health report",
+    "strategic review",
+    "generate report",
+];
+
+const isExecutiveReportRequest = (message) => {
+    const normalized = message.toLowerCase();
+    return EXECUTIVE_REPORT_KEYWORDS.some((keyword) => normalized.includes(keyword));
+};
 
 const verifyBusinessOwnership = async (businessId, userId) => {
     const business = await prisma.business.findFirst({
@@ -194,8 +208,25 @@ const chatWithBusiness = async ({ businessId, message, userId }) => {
         message: trimmedMessage,
     });
 
-    const specialistAgent = agentRouter.route(trimmedMessage);
-    const answer = await specialistAgent.generateResponse(trimmedMessage, ragContext.contextText);
+    let answer;
+    let agent;
+    let reportId;
+
+    if (isExecutiveReportRequest(trimmedMessage)) {
+        console.log("[ChatService] Executive report workflow triggered");
+        const report = await reportService.createReport({
+            businessId,
+            userId,
+            prompt: trimmedMessage,
+        });
+        answer = report.reportMarkdown;
+        agent = "CEO";
+        reportId = report.id;
+    } else {
+        const specialistAgent = agentRouter.route(trimmedMessage);
+        answer = await specialistAgent.generateResponse(trimmedMessage, ragContext.contextText);
+        agent = specialistAgent.role;
+    }
 
     const assistantMessage = await saveChatMessage({
         businessId,
@@ -208,7 +239,8 @@ const chatWithBusiness = async ({ businessId, message, userId }) => {
         answer,
         businessId,
         message: trimmedMessage,
-        agent: specialistAgent.role,
+        agent,
+        reportId,
         sources: ragContext.sources || [],
         retrieval: formatRetrievalMetadata(
             ragContext.retrievedChunks || [],

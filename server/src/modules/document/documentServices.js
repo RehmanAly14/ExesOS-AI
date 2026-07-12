@@ -3,6 +3,9 @@ const path = require("path");
 const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
 const prisma = require("../../config/prisma");
+const { EmbeddingPipeline } = require("../../ai/embeddings/processor/EmbeddingPipeline");
+
+const embeddingPipeline = new EmbeddingPipeline();
 
 const EXTRACTABLE_TYPES = {
     pdf: extractFromPdf,
@@ -50,6 +53,8 @@ const uploadDocument = async (businessId, userId, file) => {
 
     const fileType = path.extname(file.originalname).slice(1).toLowerCase();
 
+    console.log(`[DocumentService] Upload started: ${file.originalname} (business: ${businessId})`);
+
     const document = await prisma.document.create({
         data: {
             businessId,
@@ -61,6 +66,8 @@ const uploadDocument = async (businessId, userId, file) => {
         }
     });
 
+    console.log(`[DocumentService] Document created: ${document.id} (status: processing)`);
+
     try {
         const extractText = EXTRACTABLE_TYPES[fileType];
 
@@ -68,20 +75,43 @@ const uploadDocument = async (businessId, userId, file) => {
             throw new Error(`Unsupported file type: ${fileType}`);
         }
 
+        console.log(`[DocumentService] Extracting text for document: ${document.id}`);
         const extractedText = await extractText(file.path);
 
         if (!extractedText || !extractedText.trim()) {
             throw new Error("No text could be extracted from this file");
         }
 
-        return await prisma.document.update({
+        console.log(
+            `[DocumentService] Extraction complete for document: ${document.id} ` +
+            `(${extractedText.length} characters)`
+        );
+
+        const updatedDocument = await prisma.document.update({
             where: { id: document.id },
             data: {
                 extractedText,
                 status: "extracted"
             }
         });
+
+        console.log(`[DocumentService] Document status updated: ${document.id} → extracted`);
+
+        try {
+            await embeddingPipeline.processDocument(updatedDocument.id);
+        } catch (embeddingError) {
+            console.error(
+                `[DocumentService] Embedding failed for document ${updatedDocument.id}:`,
+                embeddingError.message
+            );
+        }
+
+        return prisma.document.findUnique({
+            where: { id: updatedDocument.id }
+        });
     } catch (err) {
+        console.error(`[DocumentService] Upload/extraction failed for document ${document.id}:`, err.message);
+
         return await prisma.document.update({
             where: { id: document.id },
             data: { status: "failed" }
