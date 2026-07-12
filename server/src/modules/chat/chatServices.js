@@ -1,6 +1,7 @@
 const prisma = require("../../config/prisma");
 const { FireworksEmbeddingProvider } = require("../../ai/embeddings/providers/FireworksEmbeddingProvider");
 const { PostgreSQLRetrievalService } = require("../../ai/retrieval/services/PostgreSQLRetrievalService");
+const { FireworksLLMProvider } = require("../../ai/llm/providers/FireworksLLMProvider");
 const agentRouter = require("../../ai/agents/AgentRouter");
 
 const embeddingProvider = new FireworksEmbeddingProvider();
@@ -56,6 +57,8 @@ const truncateForLog = (text, maxLength = 120) => {
     if (!text) return "";
     return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`;
 };
+
+
 
 const logRetrievalHits = (businessId, chunks) => {
     console.log(
