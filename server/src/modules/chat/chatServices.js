@@ -2,10 +2,10 @@ const prisma = require("../../config/prisma");
 const { FireworksEmbeddingProvider } = require("../../ai/embeddings/providers/FireworksEmbeddingProvider");
 const { PostgreSQLRetrievalService } = require("../../ai/retrieval/services/PostgreSQLRetrievalService");
 const { FireworksLLMProvider } = require("../../ai/llm/providers/FireworksLLMProvider");
+const agentRouter = require("../../ai/agents/AgentRouter");
 
 const embeddingProvider = new FireworksEmbeddingProvider();
 const retrievalService = new PostgreSQLRetrievalService();
-const llmProvider = new FireworksLLMProvider();
 
 const RETRIEVAL_TOP_K = Number.parseInt(process.env.RETRIEVAL_TOP_K || "5", 10);
 
@@ -58,16 +58,7 @@ const truncateForLog = (text, maxLength = 120) => {
     return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`;
 };
 
-const buildSystemPrompt = (contextText) => {
-    const context = contextText && contextText.trim()
-        ? contextText.trim()
-        : "No relevant document context was found.";
 
-    return `You are an AI executive assistant.
-
-CONTEXT:
-${context}`;
-};
 
 const logRetrievalHits = (businessId, chunks) => {
     console.log(
@@ -203,11 +194,8 @@ const chatWithBusiness = async ({ businessId, message, userId }) => {
         message: trimmedMessage,
     });
 
-    const systemPrompt = buildSystemPrompt(ragContext.contextText);
-    const answer = await llmProvider.generateChatResponse({
-        systemPrompt,
-        userMessage: trimmedMessage,
-    });
+    const specialistAgent = agentRouter.route(trimmedMessage);
+    const answer = await specialistAgent.generateResponse(trimmedMessage, ragContext.contextText);
 
     const assistantMessage = await saveChatMessage({
         businessId,
@@ -220,8 +208,10 @@ const chatWithBusiness = async ({ businessId, message, userId }) => {
         answer,
         businessId,
         message: trimmedMessage,
+        agent: specialistAgent.role,
+        sources: ragContext.sources || [],
         retrieval: formatRetrievalMetadata(
-            ragContext.retrievedChunks,
+            ragContext.retrievedChunks || [],
             ragContext.missingContext
         ),
         messages: [userMessage, assistantMessage],
