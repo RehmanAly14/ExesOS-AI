@@ -2,10 +2,12 @@ const BaseAgent = require("../BaseAgent");
 
 class SalesAgent extends BaseAgent {
   constructor() {
-    super(
-      "Sales",
-      "You are the Sales Agent. You specialize in sales pipelines, leads, customer conversions, and sales metrics. Answer the user's question using the provided context."
-    );
+    super({
+      role: "Sales",
+      roleTitle: "Sales Executive",
+      domainFocus:
+        "You deliver sales intelligence on pipelines, leads, conversions, and revenue performance using the provided context.",
+    });
   }
 }
 
