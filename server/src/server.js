@@ -1,31 +1,26 @@
 /**
  * Server Entry Point
- * ────────────────────────────────────────────────
- * Boots the Express application, connects to the
- * database, and starts listening on the configured port.
- *
- * Keeps app.js clean by isolating the HTTP server
- * bootstrapping logic here.
  */
 
 require("dotenv").config();
 
 const app = require("./app");
 const prisma = require("./config/prisma");
+const { initializeFireworksConfig } = require("./config/fireworks");
 
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 const startServer = async () => {
   try {
-   
     await prisma.$connect();
     console.log("✅ Database connected successfully.");
 
-    // ── 2. Start HTTP server ──────────────────────
+    await initializeFireworksConfig();
+
     app.listen(PORT, () => {
       console.log("─────────────────────────────────────────");
-      console.log(`🚀 BusinessOS AI Server is running`);
+      console.log(`🚀 ExecOS AI Server is running`);
       console.log(`   Environment : ${NODE_ENV}`);
       console.log(`   Port        : ${PORT}`);
       console.log(`   URL         : http://localhost:${PORT}/api`);
@@ -33,7 +28,7 @@ const startServer = async () => {
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error.message);
-    process.exit(1); 
+    process.exit(1);
   }
 };
 
@@ -47,9 +42,6 @@ const shutdown = async (signal) => {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
-// ─────────────────────────────────────────────────
-// Handle Unhandled Promise Rejections
-// ─────────────────────────────────────────────────
 process.on("unhandledRejection", (reason) => {
   console.error("❌ Unhandled Promise Rejection:", reason);
   process.exit(1);

@@ -14,17 +14,26 @@ const { PrismaClient } = require("@prisma/client");
 // ── Singleton Factory ─────────────────────────────
 const globalForPrisma = global;
 
-const prisma =
-  globalForPrisma.prisma ||
+const createClient = () =>
   new PrismaClient({
     log:
       process.env.NODE_ENV === "development"
-        ? ["query", "info", "warn", "error"] // Verbose logging in dev
-        : ["error"],                          // Only errors in production
+        ? ["query", "info", "warn", "error"]
+        : ["error"],
   });
 
-// Attach to global in non-production so hot-reloads
-// don't spawn new connections
+const isClientReady = (client) =>
+  Boolean(client?.report && typeof client.report.create === "function");
+
+let prisma = globalForPrisma.prisma;
+
+if (!isClientReady(prisma)) {
+  if (prisma?.$disconnect) {
+    prisma.$disconnect().catch(() => {});
+  }
+  prisma = createClient();
+}
+
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
