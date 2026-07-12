@@ -17,18 +17,26 @@ const { IVectorStorage } = require("../interfaces/IVectorStorage");
  *   4. SimilaritySearch can then use `<=>` cosine operator instead of in-process JS.
  */
 class PostgreSQLVectorStorage extends IVectorStorage {
+  async deleteChunksByDocumentId(documentId) {
+    const result = await prisma.documentChunk.deleteMany({
+      where: { documentId },
+    });
+    return result.count;
+  }
+
   /**
-   * Upserts an array of vector records into document_chunks.
-   * If a chunk with the same `id` already exists it is replaced.
-   *
    * @param {Array<{id: string, embedding: number[], metadata: import('../schemas/VectorSchema').IVectorMetadata}>} records
+   * @param {string} [documentId]
    * @returns {Promise<void>}
    */
-  async upsertVectors(records) {
+  async upsertVectors(records, documentId) {
     if (!records || records.length === 0) return;
 
-    // Prisma does not support bulk upsert natively, so we use a transaction
-    // to batch individual upserts and commit atomically.
+    console.log(
+      `[PostgreSQLVectorStorage] Inserting ${records.length} chunk(s)` +
+      (documentId ? ` for document: ${documentId}` : "")
+    );
+
     await prisma.$transaction(
       records.map((record) =>
         prisma.documentChunk.upsert({
@@ -59,6 +67,11 @@ class PostgreSQLVectorStorage extends IVectorStorage {
           },
         })
       )
+    );
+
+    console.log(
+      `[PostgreSQLVectorStorage] Saved ${records.length} chunk(s)` +
+      (documentId ? ` for document: ${documentId}` : "")
     );
   }
 

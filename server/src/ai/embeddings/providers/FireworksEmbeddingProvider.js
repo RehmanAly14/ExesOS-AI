@@ -5,15 +5,16 @@ class FireworksEmbeddingProvider extends IEmbeddingProvider {
   constructor() {
     super();
     this.providerNameStr = "fireworks";
-    this.dimensionsVal = 768; // Nomic-embed-text dimensions
+    this.dimensionsVal = 768;
+    this.batchSize = 100;
+  }
 
-    this.apiKey = process.env.FIREWORKS_API_KEY || "";
-    this.model = process.env.FIREWORKS_EMBEDDING_MODEL || "nomic-ai/nomic-embed-text-v1.5";
-    this.batchSize = 100; // API limits and optimal batching
-    
-    if (!this.apiKey) {
-      console.warn("WARNING: FIREWORKS_API_KEY is not set in environment variables.");
-    }
+  get apiKey() {
+    return process.env.FIREWORKS_API_KEY || "";
+  }
+
+  get model() {
+    return process.env.FIREWORKS_EMBEDDING_MODEL || "nomic-ai/nomic-embed-text-v1.5";
   }
 
   get providerName() {
@@ -32,9 +33,13 @@ class FireworksEmbeddingProvider extends IEmbeddingProvider {
    */
   async generateEmbeddingsBatch(texts) {
     if (texts.length === 0) return [];
-    if (!this.apiKey) {
+
+    const apiKey = this.apiKey;
+    if (!apiKey) {
       throw new Error("Cannot generate embeddings: FIREWORKS_API_KEY is missing.");
     }
+
+    console.log(`[FireworksEmbeddingProvider] Generating embeddings for ${texts.length} text(s)`);
 
     const allEmbeddings = [];
 
@@ -51,7 +56,7 @@ class FireworksEmbeddingProvider extends IEmbeddingProvider {
           },
           {
             headers: {
-              "Authorization": `Bearer ${this.apiKey}`,
+              "Authorization": `Bearer ${apiKey}`,
               "Content-Type": "application/json"
             }
           }
@@ -68,6 +73,7 @@ class FireworksEmbeddingProvider extends IEmbeddingProvider {
       }
     }
 
+    console.log(`[FireworksEmbeddingProvider] Generated ${allEmbeddings.length} embedding(s)`);
     return allEmbeddings;
   }
 }
